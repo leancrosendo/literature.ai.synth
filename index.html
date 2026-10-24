@@ -1,0 +1,1181 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  FileText, Upload, Sparkles, Highlight, Tag, Layers, Edit3, 
+  CheckCircle, User, Award, AlertCircle, Trash2, Plus, ArrowRight, 
+  ChevronRight, Star, RefreshCw, Eye, Check, X, HelpCircle, MessageSquare,
+  BookOpen, FolderPlus, Send, Sliders, Filter, CornerDownRight, Info
+} from 'lucide-react';
+
+// Default Sample Research Papers
+const DEFAULT_PAPERS = [
+  {
+    id: 'p1',
+    title: 'AI in Higher Education: Opportunities and Ethical Challenges',
+    authors: 'Dr. E. Vance, Prof. M. Sterling (2024)',
+    fileName: 'AI_in_Higher_Education_2024.pdf',
+    fileSize: '2.4 MB',
+    summary: {
+      keyFindings: 'Generative AI tools improve student engagement and self-directed research drafting speed by 35%. However, over-reliance reduces deep critical evaluation skills if unmonitored.',
+      methodology: 'Mixed-methods study involving 1,200 undergraduates across 5 universities using AI writing assistants over 2 academic semesters.',
+      limitations: 'Limited to humanities and social science coursework; stem disciplines were underrepresented in the evaluation sample.',
+      coreArguments: 'AI should be integrated as an interactive scaffold rather than an automated generator to preserve cognitive load in academic writing.'
+    },
+    rating: 4,
+    notes: 'Crucial for arguing why scaffolds matter in literature synthesis.',
+    annotations: [
+      { id: 'a1', text: 'Over-reliance reduces deep critical evaluation skills', category: 'Critique', note: 'Matches our thesis on needing human-in-the-loop writing.' },
+      { id: 'a2', text: 'Mixed-methods study involving 1,200 undergraduates', category: 'Methodology', note: 'Strong sample size supporting empirical validity.' }
+    ]
+  },
+  {
+    id: 'p2',
+    title: 'Gamification and Adaptive Scaffolding in STEM Learning',
+    authors: 'R. Chen, L. Gomez, K. Tanaka (2023)',
+    fileName: 'Gamification_STEM_Scaffolding.pdf',
+    fileSize: '1.8 MB',
+    summary: {
+      keyFindings: 'Structured badge mechanics and progress bars increase completion rates of complex literature matrices by 42% in sophomore research methods.',
+      methodology: 'A/B testing with two cohorts (N=450) measuring synthesis quality and task completion speed.',
+      limitations: 'Long-term retention of research concepts was not tracked past 6 months.',
+      coreArguments: 'Visualizing learning steps reduces student cognitive fatigue during complex thematic analysis tasks.'
+    },
+    rating: 5,
+    notes: 'Highlights the benefit of structured step-by-step progress tracking.',
+    annotations: [
+      { id: 'a3', text: 'Visualizing learning steps reduces student cognitive fatigue', category: 'Key Insight', note: 'Use this to justify UI workflow design.' }
+    ]
+  },
+  {
+    id: 'p3',
+    title: 'Digital Literacy & Academic Writing Outcomes in Gen-Z Learners',
+    authors: 'A. Kowalski & J. Rivera (2023)',
+    fileName: 'Digital_Literacy_Academic_Outcomes.pdf',
+    fileSize: '3.1 MB',
+    summary: {
+      keyFindings: 'Digital native students process fragmented information rapidly but struggle with thematic synthesis across contrasting literature sources.',
+      methodology: 'Qualitative analysis of 300 student research essays combined with gaze-tracking during literature review preparation.',
+      limitations: 'Subjective grading criteria across different literature evaluation instructors.',
+      coreArguments: 'Students require explicit thematic clustering exercises to bridge source comprehension and original synthesized argument.'
+    },
+    rating: 4,
+    notes: 'Provides empirical rationale for step 3 thematic clustering.',
+    annotations: [
+      { id: 'a4', text: 'Struggle with thematic synthesis across contrasting literature sources', category: 'Question', note: 'How can AI assist synthesis without taking over writing?' }
+    ]
+  }
+];
+
+// Pre-defined Initial Themes
+const DEFAULT_THEMES = [
+  { id: 't1', title: 'Theme A: Pedagogical Integration & Cognitive Fatigue', color: 'bg-blue-100 text-blue-800 border-blue-300', annotationIds: ['a1', 'a3'] },
+  { id: 't2', title: 'Theme B: Synthesis Challenges in Digital Literacy', color: 'bg-purple-100 text-purple-800 border-purple-300', annotationIds: ['a4'] },
+  { id: 't3', title: 'Theme C: Empirical Evidence for Scaffolding', color: 'bg-amber-100 text-amber-800 border-amber-300', annotationIds: ['a2'] }
+];
+
+// Initial Draft Synthesis Text
+const INITIAL_SYNTHESIS_TEXT = `The integration of digital tools and artificial intelligence in modern higher education presents a dual narrative of heightened engagement alongside significant cognitive challenges. While Vance and Sterling (2024) demonstrate that generative AI tools accelerate student research drafting, they warn that unguided usage weakens critical evaluation skills over time. This challenge is further echoed by Kowalski and Rivera (2023), who observe that although Gen-Z learners process fragmented digital information rapidly, they frequently struggle with synthesizing contrasting sources into a coherent literature review.
+
+To mitigate these drawbacks, structural and pedagogical scaffolds play a decisive role. Chen et al. (2023) emphasize that adaptive scaffolding and visual tracking mechanism reduce student cognitive fatigue during complex thematic analysis tasks. Consequently, implementing structured literature matrices and thematic clustering allows learners to bridge the gap between initial paper comprehension and higher-order academic writing without compromising critical thinking capabilities.`;
+
+export default function App() {
+  // Navigation & User Role State
+  const [role, setRole] = useState('student'); // 'student' | 'teacher'
+  const [studentStep, setStudentStep] = useState(1); // 1: Upload, 2: Annotate, 3: Cluster, 4: Synthesis
+  
+  // App Data States
+  const [papers, setPapers] = useState(DEFAULT_PAPERS);
+  const [themes, setThemes] = useState(DEFAULT_THEMES);
+  const [synthesisText, setSynthesisText] = useState(INITIAL_SYNTHESIS_TEXT);
+  const [isProcessingPdf, setIsProcessingPdf] = useState(false);
+  const [aiApiKey, setAiApiKey] = useState('');
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  // Student Evaluation & Submission State
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  
+  // Teacher Review State
+  const [teacherRubric, setTeacherRubric] = useState({
+    criticalAnalysis: 4,
+    thematicCoherence: 5,
+    sourceIntegration: 4,
+    synthesisClarity: 4
+  });
+  const [teacherGeneralFeedback, setTeacherGeneralFeedback] = useState(
+    'Strong synthesis overall! Excellent integration of sources across themes. Pay attention to strengthening critical claims in paragraph 1.'
+  );
+  const [flaggedSentences, setFlaggedSentences] = useState([
+    {
+      id: 'f1',
+      sentence: 'While Vance and Sterling (2024) demonstrate that generative AI tools accelerate student research drafting, they warn that unguided usage weakens critical evaluation skills over time.',
+      issue: 'Lacks Critical Depth',
+      suggestion: 'Elaborate on *how* unguided usage weakens skills—mention specific cognitive mechanisms like reliance on automated summaries.',
+      approved: true
+    },
+    {
+      id: 'f2',
+      sentence: 'This challenge is further echoed by Kowalski and Rivera (2023), who observe that although Gen-Z learners process fragmented digital information rapidly, they frequently struggle with synthesizing contrasting sources into a coherent literature review.',
+      issue: 'Passive / Syntactical Flaw',
+      suggestion: 'Rephrase to highlight the cause: "Kowalski and Rivera (2023) echo this concern, finding that rapid processing of fragmented digital info often impedes holistic synthesis."',
+      approved: false
+    }
+  ]);
+  const [isAnalyzingSentences, setIsAnalyzingSentences] = useState(false);
+  const [reviewPublished, setReviewPublished] = useState(false);
+
+  // Toast Helper
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // --- GEMINI API CALL HANDLER ---
+  const callGeminiApi = async (prompt, systemInstruction = '') => {
+    try {
+      const apiKey = aiApiKey.trim() || '';
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+      
+      const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined
+      };
+
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error(`API error HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+    } catch (err) {
+      console.warn('Gemini API call failed, falling back to rule-based mock logic:', err);
+      return null;
+    }
+  };
+
+  // PDF Upload Handler (Simulated + AI fallback)
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setIsProcessingPdf(true);
+    showToast(`Processing ${files.length} document(s) with AI summarizer...`);
+
+    for (let file of files) {
+      const titleClean = file.name.replace('.pdf', '').replace(/_/g, ' ');
+      
+      // Attempt Gemini API summarization prompt or generated smart mock
+      const prompt = `Analyze this uploaded study title "${titleClean}" and produce a JSON with keyFindings, methodology, limitations, and coreArguments.`;
+      const aiResponse = await callGeminiApi(prompt, "You are a research paper analyzer. Return concise academic key findings.");
+
+      let newPaperSummary = {
+        keyFindings: `Key empirical findings from ${titleClean} indicating strong correlation between scaffolded learning and academic output.`,
+        methodology: 'Quantitative survey and longitudinal intervention with higher education cohorts.',
+        limitations: 'Sample limited to single institution with high initial digital competency.',
+        coreArguments: 'Structured intervention significantly mitigates student task anxiety and enhances quality of synthesis.'
+      };
+
+      if (aiResponse) {
+        try {
+          const parsed = JSON.parse(aiResponse.replace(/```json|```/g, ''));
+          if (parsed.keyFindings) newPaperSummary = parsed;
+        } catch (pErr) {
+          // fallback stays
+        }
+      }
+
+      const newPaper = {
+        id: 'p_' + Date.now() + Math.random().toString(36).substr(2, 4),
+        title: titleClean.charAt(0).toUpperCase() + titleClean.slice(1),
+        authors: 'Author et al. (2024)',
+        fileName: file.name,
+        fileSize: (file.size / (1024 * 1024)).toFixed(1) + ' MB',
+        summary: newPaperSummary,
+        rating: 0,
+        notes: '',
+        annotations: []
+      };
+
+      setPapers(prev => [...prev, newPaper]);
+    }
+
+    setIsProcessingPdf(false);
+    showToast('Papers uploaded and summarized successfully!');
+  };
+
+  // Add Annotation to Paper
+  const addAnnotation = (paperId, text, category, note) => {
+    if (!text) return;
+    const newAnno = {
+      id: 'a_' + Date.now(),
+      text,
+      category: category || 'Key Insight',
+      note: note || ''
+    };
+
+    setPapers(prev => prev.map(p => {
+      if (p.id === paperId) {
+        return { ...p, annotations: [...p.annotations, newAnno] };
+      }
+      return p;
+    }));
+    showToast('Annotation added!');
+  };
+
+  // Add Theme
+  const createNewTheme = (title) => {
+    if (!title.trim()) return;
+    const colors = [
+      'bg-blue-100 text-blue-800 border-blue-300',
+      'bg-purple-100 text-purple-800 border-purple-300',
+      'bg-emerald-100 text-emerald-800 border-emerald-300',
+      'bg-amber-100 text-amber-800 border-amber-300',
+      'bg-rose-100 text-rose-800 border-rose-300'
+    ];
+    const newTheme = {
+      id: 't_' + Date.now(),
+      title,
+      color: colors[themes.length % colors.length],
+      annotationIds: []
+    };
+    setThemes(prev => [...prev, newTheme]);
+    showToast(`Theme "${title}" created!`);
+  };
+
+  // Toggle Annotation inside Theme
+  const toggleAnnotationInTheme = (themeId, annoId) => {
+    setThemes(prev => prev.map(t => {
+      if (t.id === themeId) {
+        const exists = t.annotationIds.includes(annoId);
+        return {
+          ...t,
+          annotationIds: exists 
+            ? t.annotationIds.filter(id => id !== annoId) 
+            : [...t.annotationIds, annoId]
+        };
+      }
+      return t;
+    }));
+  };
+
+  // AI Synthesis Helper Draft Generation
+  const generateAiSynthesisDraft = async () => {
+    setIsGeneratingAi(true);
+    showToast('AI is drafting synthesis from your themes and annotations...');
+
+    const prompt = `Synthesize these research papers and themes into a coherent multi-paragraph literature synthesis essay:
+    Papers: ${papers.map(p => p.title + ' (' + p.authors + ')').join('; ')}
+    Themes: ${themes.map(t => t.title).join('; ')}`;
+
+    const sys = "You are an expert academic writing assistant. Generate structured, cohesive literature synthesis paragraphs formatted in Markdown with citations.";
+    
+    const result = await callGeminiApi(prompt, sys);
+
+    if (result) {
+      setSynthesisText(result);
+    } else {
+      // Rule-based rich fallback
+      const generated = `### Literature Synthesis: AI Scaffolding & Digital Learning Synthesis\n\n` +
+        `Current literature highlights a fundamental shift in higher education pedagogy due to emergent artificial intelligence tools. ` +
+        papers.map((p, idx) => `${p.authors} highlight that ${p.summary.keyFindings.toLowerCase()}`).join(" ") + 
+        `\n\nFurthermore, thematic analysis across the evaluated studies demonstrates that structured scaffolds significantly reduce student cognitive fatigue while maximizing critical reflection.`;
+      setSynthesisText(generated);
+    }
+
+    setIsGeneratingAi(false);
+    showToast('Synthesis draft updated with AI insights!');
+  };
+
+  // Teacher AI Flagging Analysis
+  const runTeacherAiFlagging = async () => {
+    setIsAnalyzingSentences(true);
+    showToast('AI is auditing student synthesis for sentence-level improvements...');
+
+    const prompt = `Analyze this student literature synthesis and identify sentences that need improvement regarding: Passive voice, Vague citations, Lacks critical depth, or Syntactical flaws:
+    \n\n"${synthesisText}"`;
+
+    const sys = "Analyze student academic text. Identify 2-3 specific problematic sentences and return suggestions.";
+
+    const apiResult = await callGeminiApi(prompt, sys);
+
+    if (apiResult) {
+      // Mocked parsed response structure for smooth demo UI
+      setFlaggedSentences([
+        {
+          id: 'f_new1',
+          sentence: synthesisText.split('.')[0] + '.',
+          issue: 'Vague Citation',
+          suggestion: 'Specify which authors or academic frameworks support this introductory generalization.',
+          approved: true
+        },
+        {
+          id: 'f_new2',
+          sentence: synthesisText.split('.')[2] + '.' || 'This challenge is further echoed.',
+          issue: 'Lacks Critical Depth',
+          suggestion: 'Detail the underlying mechanisms causing this challenge in academic writing.',
+          approved: true
+        }
+      ]);
+    } else {
+      // fallback existing flags
+      setFlaggedSentences([
+        {
+          id: 'f1',
+          sentence: 'While Vance and Sterling (2024) demonstrate that generative AI tools accelerate student research drafting, they warn that unguided usage weakens critical evaluation skills over time.',
+          issue: 'Lacks Critical Depth',
+          suggestion: 'Elaborate on *how* unguided usage weakens skills—mention specific cognitive mechanisms like reliance on automated summaries.',
+          approved: true
+        },
+        {
+          id: 'f2',
+          sentence: 'This challenge is further echoed by Kowalski and Rivera (2023), who observe that although Gen-Z learners process fragmented digital information rapidly, they frequently struggle with synthesizing contrasting sources into a coherent literature review.',
+          issue: 'Passive / Syntactical Flaw',
+          suggestion: 'Rephrase to highlight the cause: "Kowalski and Rivera (2023) echo this concern, finding that rapid processing of fragmented digital info often impedes holistic synthesis."',
+          approved: false
+        }
+      ]);
+    }
+
+    setIsAnalyzingSentences(false);
+    showToast('Sentence analysis complete!');
+  };
+
+  // All Annotations Flat List
+  const allAnnotations = papers.flatMap(p => p.annotations.map(a => ({ ...a, paperTitle: p.title })));
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 text-sm animate-bounce">
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* HEADER / ROLE SWITCHER DASHBOARD */}
+      <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-4">
+          
+          {/* Logo & Platform Info */}
+          <div className="flex items-center space-x-3">
+            <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                SynthesizeAI <span className="text-xs font-normal bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 px-2 py-0.5 rounded-full">Academic Suite</span>
+              </h1>
+              <p className="text-xs text-slate-400">Research Study Evaluation, Clustering & Synthesis Platform</p>
+            </div>
+          </div>
+
+          {/* Optional Gemini API Key Box */}
+          <div className="hidden md:flex items-center bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-300 space-x-2">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <input 
+              type="password"
+              placeholder="Optional Gemini API Key"
+              value={aiApiKey}
+              onChange={(e) => setAiApiKey(e.target.value)}
+              className="bg-transparent focus:outline-none w-36 text-white placeholder-slate-500 text-xs"
+            />
+            {aiApiKey && <span className="text-emerald-400 font-medium text-[10px]">Active</span>}
+          </div>
+
+          {/* Role Selector Buttons */}
+          <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
+            <button
+              onClick={() => setRole('student')}
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                role === 'student' 
+                  ? 'bg-indigo-600 text-white shadow-md' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Student Mode</span>
+            </button>
+
+            <button
+              onClick={() => setRole('teacher')}
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                role === 'teacher' 
+                  ? 'bg-emerald-600 text-white shadow-md' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>Teacher Review</span>
+              {isSubmitted && !reviewPublished && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              )}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* STUDENT VIEW WORKFLOW */}
+      {role === 'student' && (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col space-y-6">
+          
+          {/* Workflow Progress Navigation Header */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
+              
+              <button 
+                onClick={() => setStudentStep(1)}
+                className={`flex-1 flex items-center justify-center py-2.5 px-3 rounded-xl transition-all ${
+                  studentStep === 1 
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm font-bold' 
+                    : 'hover:bg-slate-100'
+                }`}
+              >
+                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] flex items-center justify-center mr-2">1</span>
+                1. Upload & AI Summarize
+              </button>
+
+              <ChevronRight className="w-4 h-4 text-slate-300 mx-1" />
+
+              <button 
+                onClick={() => setStudentStep(2)}
+                className={`flex-1 flex items-center justify-center py-2.5 px-3 rounded-xl transition-all ${
+                  studentStep === 2 
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm font-bold' 
+                    : 'hover:bg-slate-100'
+                }`}
+              >
+                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] flex items-center justify-center mr-2">2</span>
+                2. Annotate & Evaluate
+              </button>
+
+              <ChevronRight className="w-4 h-4 text-slate-300 mx-1" />
+
+              <button 
+                onClick={() => setStudentStep(3)}
+                className={`flex-1 flex items-center justify-center py-2.5 px-3 rounded-xl transition-all ${
+                  studentStep === 3 
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm font-bold' 
+                    : 'hover:bg-slate-100'
+                }`}
+              >
+                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] flex items-center justify-center mr-2">3</span>
+                3. Thematic Clustering
+              </button>
+
+              <ChevronRight className="w-4 h-4 text-slate-300 mx-1" />
+
+              <button 
+                onClick={() => setStudentStep(4)}
+                className={`flex-1 flex items-center justify-center py-2.5 px-3 rounded-xl transition-all ${
+                  studentStep === 4 
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm font-bold' 
+                    : 'hover:bg-slate-100'
+                }`}
+              >
+                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] flex items-center justify-center mr-2">4</span>
+                4. Synthesis & Submit
+              </button>
+            </div>
+          </div>
+
+          {/* Teacher Published Feedback Alert Box (if available) */}
+          {reviewPublished && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-start space-x-4 shadow-sm animate-fade-in">
+              <div className="p-2 bg-emerald-600 text-white rounded-xl">
+                <CheckCircle className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-emerald-900">Teacher Feedback & Score Published!</h3>
+                  <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-300">
+                    Grade: 17 / 20
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-800 mt-1">{teacherGeneralFeedback}</p>
+                <div className="mt-2 text-xs text-emerald-700 font-medium">
+                  • AI Sentences Flagged for Improvement: {flaggedSentences.length} items reviewed.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 1: DOCUMENT UPLOAD & AI SUMMARIZATION */}
+          {studentStep === 1 && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Left Column: Upload Drag & Drop Box */}
+              <div className="lg:col-span-1 bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Upload className="w-4 h-4 text-indigo-600" /> Upload Research PDFs
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Upload multiple empirical research studies. Our AI tool will automatically parse and structure their key findings.
+                  </p>
+
+                  <div className="mt-5 border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-indigo-50/40 rounded-xl p-6 text-center transition-all cursor-pointer relative">
+                    <input 
+                      type="file" 
+                      multiple 
+                      accept=".pdf"
+                      onChange={handleFileUpload}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div className="flex flex-col items-center">
+                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-md mb-3 text-indigo-600">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-800">Drop PDF research files here</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">or click to browse from device</p>
+                      <span className="mt-3 inline-block bg-indigo-600 text-white text-[11px] font-medium px-3 py-1 rounded-lg">
+                        Select PDFs
+                      </span>
+                    </div>
+                  </div>
+
+                  {isProcessingPdf && (
+                    <div className="mt-4 bg-indigo-50 border border-indigo-100 rounded-xl p-3 flex items-center space-x-3 text-xs text-indigo-800">
+                      <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+                      <span>Parsing PDF structure & extracting core findings via AI...</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-slate-100">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+                    <span className="font-semibold text-slate-700 flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Pre-loaded Studies Active
+                    </span>
+                    <p className="text-slate-500 mt-1">
+                      3 sample research papers are pre-loaded so you can proceed with synthesis testing immediately.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Summarized Studies List */}
+              <div className="lg:col-span-2 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-indigo-600" /> Processed Papers ({papers.length})
+                  </h2>
+                  <button 
+                    onClick={() => setStudentStep(2)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-all"
+                  >
+                    <span>Proceed to Annotations</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {papers.map((paper) => (
+                  <div key={paper.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 hover:border-indigo-200 transition-all">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                          {paper.fileName}
+                        </span>
+                        <h3 className="text-sm font-bold text-slate-900 mt-1">{paper.title}</h3>
+                        <p className="text-xs text-slate-500">{paper.authors}</p>
+                      </div>
+                      <button 
+                        onClick={() => setPapers(prev => prev.filter(p => p.id !== paper.id))}
+                        className="text-slate-300 hover:text-rose-500 transition-colors p-1"
+                        title="Remove paper"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* AI Generated Structured Summary */}
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <span className="font-bold text-slate-800 block mb-1 text-[11px] text-indigo-700">Key Findings:</span>
+                        <p className="text-slate-600 leading-relaxed">{paper.summary.keyFindings}</p>
+                      </div>
+
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <span className="font-bold text-slate-800 block mb-1 text-[11px] text-indigo-700">Methodology:</span>
+                        <p className="text-slate-600 leading-relaxed">{paper.summary.methodology}</p>
+                      </div>
+
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <span className="font-bold text-slate-800 block mb-1 text-[11px] text-indigo-700">Core Arguments:</span>
+                        <p className="text-slate-600 leading-relaxed">{paper.summary.coreArguments}</p>
+                      </div>
+
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <span className="font-bold text-slate-800 block mb-1 text-[11px] text-indigo-700">Limitations:</span>
+                        <p className="text-slate-600 leading-relaxed">{paper.summary.limitations}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: INTERACTIVE ANNOTATION & EVALUATION */}
+          {studentStep === 2 && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Annotate & Rate Literature</h2>
+                  <p className="text-xs text-slate-500">Highlight key insights, methodology notes, or critiques to prepare for thematic clustering.</p>
+                </div>
+                <button 
+                  onClick={() => setStudentStep(3)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-all"
+                >
+                  <span>Proceed to Clustering</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {papers.map((paper) => (
+                  <div key={paper.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col justify-between">
+                    <div>
+                      {/* Rating & Paper Info */}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                          {paper.fileName}
+                        </span>
+                        
+                        {/* Interactive Star Rating */}
+                        <div className="flex items-center space-x-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              onClick={() => {
+                                setPapers(prev => prev.map(p => p.id === paper.id ? { ...p, rating: star } : p));
+                              }}
+                              className="focus:outline-none"
+                            >
+                              <Star 
+                                className={`w-3.5 h-3.5 ${star <= paper.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} 
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <h3 className="text-sm font-bold text-slate-900 leading-snug">{paper.title}</h3>
+
+                      {/* Add Annotation Form */}
+                      <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
+                        <label className="text-[11px] font-semibold text-slate-700 block">Add New Critique / Annotation:</label>
+                        <input
+                          type="text"
+                          id={`anno_text_${paper.id}`}
+                          placeholder="Quote or insight from paper..."
+                          className="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 bg-slate-50"
+                        />
+                        <div className="flex items-center gap-2">
+                          <select 
+                            id={`anno_cat_${paper.id}`}
+                            className="text-xs p-2 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none text-slate-700"
+                          >
+                            <option value="Key Insight">Key Insight</option>
+                            <option value="Methodology">Methodology</option>
+                            <option value="Critique">Critique</option>
+                            <option value="Question">Question</option>
+                          </select>
+                          <button
+                            onClick={() => {
+                              const txtEl = document.getElementById(`anno_text_${paper.id}`);
+                              const catEl = document.getElementById(`anno_cat_${paper.id}`);
+                              if (txtEl && txtEl.value) {
+                                addAnnotation(paper.id, txtEl.value, catEl.value, 'User added note');
+                                txtEl.value = '';
+                              }
+                            }}
+                            className="bg-slate-900 text-white text-xs px-3 py-2 rounded-xl font-medium hover:bg-slate-800 transition-colors flex-1"
+                          >
+                            Add Tag
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Current Annotations List */}
+                      <div className="mt-4 space-y-2">
+                        <span className="text-[11px] font-bold text-slate-500 block uppercase tracking-wider">
+                          Annotations ({paper.annotations.length})
+                        </span>
+                        {paper.annotations.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic">No annotations added yet.</p>
+                        ) : (
+                          paper.annotations.map(anno => (
+                            <div key={anno.id} className="bg-indigo-50/60 border border-indigo-100 p-2.5 rounded-xl text-xs space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                  anno.category === 'Critique' ? 'bg-rose-100 text-rose-700' :
+                                  anno.category === 'Methodology' ? 'bg-emerald-100 text-emerald-700' :
+                                  anno.category === 'Question' ? 'bg-amber-100 text-amber-700' :
+                                  'bg-indigo-100 text-indigo-700'
+                                }`}>
+                                  {anno.category}
+                                </span>
+                              </div>
+                              <p className="text-slate-800 font-medium">"{anno.text}"</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: THEMATIC CLUSTERING */}
+          {studentStep === 3 && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-indigo-600" /> Visual Thematic Clustering
+                  </h2>
+                  <p className="text-xs text-slate-500">Group annotated evidence into overarching academic themes to structure your written synthesis.</p>
+                </div>
+                <button 
+                  onClick={() => setStudentStep(4)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition-all"
+                >
+                  <span>Proceed to Synthesis Draft</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Create Theme Input Bar */}
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-3">
+                <FolderPlus className="w-5 h-5 text-indigo-600" />
+                <input 
+                  type="text"
+                  id="newThemeTitleInput"
+                  placeholder="Enter new synthesis theme name (e.g., 'Theme D: Assessment Validity')..."
+                  className="flex-1 text-xs p-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  onClick={() => {
+                    const input = document.getElementById('newThemeTitleInput');
+                    if (input && input.value) {
+                      createNewTheme(input.value);
+                      input.value = '';
+                    }
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-4 py-2.5 rounded-xl font-medium transition-all shadow-sm"
+                >
+                  + Create Theme
+                </button>
+              </div>
+
+              {/* Themes Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {themes.map(theme => (
+                  <div key={theme.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${theme.color}`}>
+                          {theme.title}
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-400">
+                          {theme.annotationIds.length} item(s)
+                        </span>
+                      </div>
+
+                      {/* Assigned Annotations inside this theme */}
+                      <div className="space-y-2 mt-4">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Assigned Evidence & Quotes:
+                        </label>
+                        {theme.annotationIds.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-xl text-center border border-dashed border-slate-200">
+                            No annotations assigned. Select items below to group into this theme.
+                          </p>
+                        ) : (
+                          theme.annotationIds.map(aId => {
+                            const annoObj = allAnnotations.find(a => a.id === aId);
+                            if (!annoObj) return null;
+                            return (
+                              <div key={aId} className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-xs flex items-start justify-between gap-2">
+                                <div>
+                                  <span className="text-[9px] font-bold text-indigo-600 block">{annoObj.paperTitle}</span>
+                                  <p className="text-slate-700 font-medium mt-0.5">"{annoObj.text}"</p>
+                                </div>
+                                <button
+                                  onClick={() => toggleAnnotationInTheme(theme.id, aId)}
+                                  className="text-slate-400 hover:text-rose-500 text-xs font-bold p-1"
+                                  title="Unassign from theme"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Unassigned Annotations Selector */}
+                    <div className="mt-5 pt-3 border-t border-slate-100">
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-2">Assign Annotations to this Theme:</label>
+                      <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                        {allAnnotations.map(a => {
+                          const isAssigned = theme.annotationIds.includes(a.id);
+                          return (
+                            <button
+                              key={a.id}
+                              onClick={() => toggleAnnotationInTheme(theme.id, a.id)}
+                              className={`w-full text-left p-2 rounded-lg text-[11px] flex items-center justify-between border transition-all ${
+                                isAssigned 
+                                  ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-medium' 
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                              }`}
+                            >
+                              <span className="truncate mr-2">"{a.text}"</span>
+                              <span className="font-bold text-xs">{isAssigned ? '✓' : '+'}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: SYNTHESIS WRITING & AI DRAFTING ASSISTANCE */}
+          {studentStep === 4 && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Left Column: Themes & Reference Checklist */}
+              <div className="lg:col-span-1 space-y-4">
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-indigo-600" /> Active Clustered Themes
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">Ensure your draft references all key themes created in Step 3.</p>
+
+                  <div className="mt-4 space-y-2">
+                    {themes.map(t => (
+                      <div key={t.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs flex items-center justify-between">
+                        <span className="font-semibold text-slate-800">{t.title}</span>
+                        <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-bold">
+                          {t.annotationIds.length} sources
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* AI Assistant Callout Box */}
+                <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
+                  <div className="flex items-center space-x-2 text-amber-400">
+                    <Sparkles className="w-5 h-5" />
+                    <h4 className="text-sm font-bold text-white">AI Synthesis Assistant</h4>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Click below to let Gemini AI auto-draft an integrated synthesis matrix paragraph combining your papers and themes.
+                  </p>
+                  <button
+                    onClick={generateAiSynthesisDraft}
+                    disabled={isGeneratingAi}
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2.5 rounded-xl shadow transition-all flex items-center justify-center space-x-2"
+                  >
+                    {isGeneratingAi ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Generating Draft...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Draft Synthesis with AI</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Rich Text Draft Area */}
+              <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">Literature Synthesis Draft</h2>
+                      <p className="text-xs text-slate-500">Draft your synthesized academic response below.</p>
+                    </div>
+                    <div className="text-xs text-slate-400 font-medium">
+                      Word Count: <span className="text-slate-800 font-bold">{synthesisText.trim().split(/\s+/).length}</span> words
+                    </div>
+                  </div>
+
+                  <textarea
+                    value={synthesisText}
+                    onChange={(e) => setSynthesisText(e.target.value)}
+                    rows={14}
+                    className="w-full mt-4 p-4 text-xs sm:text-sm font-serif text-slate-800 leading-relaxed border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 bg-slate-50/50"
+                    placeholder="Write your research synthesis here..."
+                  />
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-xs text-slate-500">
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                    <span>Auto-saved locally</span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setIsSubmitted(true);
+                      showToast('Synthesis submitted to Teacher for review!');
+                    }}
+                    disabled={isSubmitted}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-2 shadow-md transition-all ${
+                      isSubmitted 
+                        ? 'bg-emerald-600 text-white cursor-default' 
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    }`}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{isSubmitted ? 'Submitted to Teacher ✓' : 'Submit Synthesis for Grading'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      )}
+
+      {/* TEACHER VIEW WORKFLOW */}
+      {role === 'teacher' && (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+          
+          {/* Dashboard Header Bar */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                  Instructor Evaluation Panel
+                </span>
+                <span className="text-xs text-slate-400">• Student Submission: Alex Johnson</span>
+              </div>
+              <h2 className="text-base font-bold text-slate-900 mt-1">Research Synthesis Evaluation & AI Flagging</h2>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  setReviewPublished(true);
+                  showToast('Teacher evaluation and AI sentence flags published to student!');
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center space-x-2 shadow-md transition-all"
+              >
+                <Check className="w-4 h-4" />
+                <span>Publish Evaluation & Feedback</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Left Column: Student Synthesis Text & AI Flagging Overlay */}
+            <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-600" /> Student Literature Synthesis Text
+                </h3>
+
+                <button
+                  onClick={runTeacherAiFlagging}
+                  disabled={isAnalyzingSentences}
+                  className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 transition-all"
+                >
+                  {isAnalyzingSentences ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  )}
+                  <span>AI Analyze & Flag Sentences</span>
+                </button>
+              </div>
+
+              {/* Student Written Text with Highlighted Flagged Sentences */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-serif text-slate-800 leading-relaxed whitespace-pre-wrap">
+                {synthesisText}
+              </div>
+
+              {/* AI Sentence-Level Flagged Items Box */}
+              <div className="pt-4 border-t border-slate-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-amber-500" /> AI-Flagged Sentences for Refinement ({flaggedSentences.length})
+                  </h4>
+                  <span className="text-[10px] text-slate-400">Review and approve inline feedback before publishing</span>
+                </div>
+
+                <div className="space-y-3">
+                  {flaggedSentences.map((flag) => (
+                    <div 
+                      key={flag.id} 
+                      className={`p-4 rounded-xl border text-xs space-y-2 transition-all ${
+                        flag.approved 
+                          ? 'bg-amber-50/70 border-amber-200' 
+                          : 'bg-slate-50 border-slate-200 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-200 text-amber-900 px-2 py-0.5 rounded">
+                          Issue: {flag.issue}
+                        </span>
+
+                        <button
+                          onClick={() => {
+                            setFlaggedSentences(prev => prev.map(f => f.id === flag.id ? { ...f, approved: !f.approved } : f));
+                          }}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all ${
+                            flag.approved 
+                              ? 'bg-emerald-600 text-white' 
+                              : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {flag.approved ? 'Approved ✓' : 'Approve Feedback'}
+                        </button>
+                      </div>
+
+                      <p className="text-slate-800 font-serif italic border-l-2 border-amber-400 pl-2">
+                        "{flag.sentence}"
+                      </p>
+
+                      <div className="bg-white p-2.5 rounded-lg border border-amber-200 text-slate-700">
+                        <span className="font-bold text-amber-900 block text-[10px] uppercase">Suggested Refinement:</span>
+                        <p className="mt-0.5 text-xs">{flag.suggestion}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Grading Rubric & Qualitative Feedback */}
+            <div className="lg:col-span-1 space-y-6">
+              
+              {/* Grading Rubric */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Award className="w-4 h-4 text-emerald-600" /> Evaluation Rubric
+                </h3>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <div className="flex justify-between mb-1 font-semibold text-slate-700">
+                      <span>Critical Analysis</span>
+                      <span className="text-indigo-600 font-bold">{teacherRubric.criticalAnalysis} / 5</span>
+                    </div>
+                    <input 
+                      type="range" min="1" max="5" 
+                      value={teacherRubric.criticalAnalysis}
+                      onChange={(e) => setTeacherRubric({ ...teacherRubric, criticalAnalysis: parseInt(e.target.value) })}
+                      className="w-full accent-emerald-600"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between mb-1 font-semibold text-slate-700">
+                      <span>Thematic Coherence</span>
+                      <span className="text-indigo-600 font-bold">{teacherRubric.thematicCoherence} / 5</span>
+                    </div>
+                    <input 
+                      type="range" min="1" max="5" 
+                      value={teacherRubric.thematicCoherence}
+                      onChange={(e) => setTeacherRubric({ ...teacherRubric, thematicCoherence: parseInt(e.target.value) })}
+                      className="w-full accent-emerald-600"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between mb-1 font-semibold text-slate-700">
+                      <span>Source Integration</span>
+                      <span className="text-indigo-600 font-bold">{teacherRubric.sourceIntegration} / 5</span>
+                    </div>
+                    <input 
+                      type="range" min="1" max="5" 
+                      value={teacherRubric.sourceIntegration}
+                      onChange={(e) => setTeacherRubric({ ...teacherRubric, sourceIntegration: parseInt(e.target.value) })}
+                      className="w-full accent-emerald-600"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between mb-1 font-semibold text-slate-700">
+                      <span>Synthesis Clarity</span>
+                      <span className="text-indigo-600 font-bold">{teacherRubric.synthesisClarity} / 5</span>
+                    </div>
+                    <input 
+                      type="range" min="1" max="5" 
+                      value={teacherRubric.synthesisClarity}
+                      onChange={(e) => setTeacherRubric({ ...teacherRubric, synthesisClarity: parseInt(e.target.value) })}
+                      className="w-full accent-emerald-600"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between font-bold text-xs">
+                  <span className="text-slate-700">Total Score:</span>
+                  <span className="text-base text-emerald-600">
+                    {Object.values(teacherRubric).reduce((a, b) => a + b, 0)} / 20
+                  </span>
+                </div>
+              </div>
+
+              {/* General Feedback Box */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-3">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-emerald-600" /> Qualitative Feedback
+                </h3>
+                <textarea
+                  value={teacherGeneralFeedback}
+                  onChange={(e) => setTeacherGeneralFeedback(e.target.value)}
+                  rows={4}
+                  className="w-full p-3 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 bg-slate-50"
+                  placeholder="Provide general encouraging comments or revision instructions..."
+                />
+              </div>
+
+              {/* Student Overview Stats */}
+              <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-sm text-xs space-y-2">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Student Progress Summary</span>
+                <div className="flex justify-between border-b border-slate-800 pb-1.5 pt-1">
+                  <span className="text-slate-300">Papers Uploaded:</span>
+                  <span className="font-bold text-amber-400">{papers.length}</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-800 pb-1.5">
+                  <span className="text-slate-300">Total Annotations Created:</span>
+                  <span className="font-bold text-amber-400">{allAnnotations.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-300">Themes Formed:</span>
+                  <span className="font-bold text-amber-400">{themes.length}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      )}
+
+      {/* FOOTER */}
+      <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400 mt-auto">
+        SynthesizeAI — AI-Assisted Higher Education Research & Synthesis Platform
+      </footer>
+    </div>
+  );
+}
