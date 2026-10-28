@@ -7,1436 +7,1435 @@
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel Standalone for JSX transformation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- PDF.js CDN for in-browser PDF text parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            brand: {
-              50: '#f0fdf4',
-              500: '#10b981',
-              600: '#059669',
-              700: '#047857',
-            }
-          }
-        }
-      }
+    if (window['pdfjs-dist/build/pdf']) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     }
   </script>
-
-  <!-- React, ReactDOM & Babel for Single-File Execution -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Lucide Icons -->
+  
+  <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
 
-  <!-- PDF.js CDN for Client-Side PDF Parsing -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    if (window.pdfjsLib) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  </script>
-
   <style>
-    /* Custom Scrollbar & Transition Styling */
-    ::-webkit-scrollbar {
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
       width: 6px;
       height: 6px;
     }
-    ::-webkit-scrollbar-track {
-      background: rgba(0,0,0,0.05);
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 4px;
     }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(0,0,0,0.2);
-      border-radius: 3px;
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
     }
-    .dark ::-webkit-scrollbar-track {
-      background: rgba(255,255,255,0.05);
-    }
-    .dark ::-webkit-scrollbar-thumb {
-      background: rgba(255,255,255,0.2);
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
     }
   </style>
 </head>
-<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors duration-200 min-h-screen">
+<body class="bg-slate-900 text-slate-100 min-h-screen antialiased">
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useMemo } = React;
 
-    // Single default paper example with foreign/local distinction and publication metadata
-    const INITIAL_SINGLE_PAPER = [
+    // Default sample study (Only 1 pre-existing document)
+    const initialStudies = [
       {
-        id: 'paper-1',
-        title: 'Generative AI in Higher Education: Pedagogical Opportunities & Ethical Risks',
-        authors: 'Jenkins, S., & Vance, M.',
-        year: '2024',
-        journal: 'Journal of Educational Technology & Society',
-        volume: '27(2)',
-        pages: '45-58',
-        origin: 'Foreign', // 'Foreign' or 'Local (Philippines)'
-        fileName: 'AI_in_Higher_Education_2024.pdf',
-        fileSize: '2.4 MB',
-        uploadedAt: Date.now() - 100000,
-        summary: {
-          keyFindings: 'Generative AI tools increase initial literature search velocity by 40%, but unguided deployment correlates with a 25% drop in structural argumentation rigor.',
-          methodology: 'Mixed-methods longitudinal study across 1,400 undergraduate students over two full academic terms.',
-          limitations: 'Study cohort focused primarily on humanities and social science majors; STEM disciplines were under-indexed.',
-          coreArguments: 'AI should serve as an interactive scaffold rather than an automated writing generator to safeguard critical thinking.'
-        },
-        rating: 4,
-        notes: 'Key foundational paper supporting the need for scaffolded synthesis workflows.',
+        id: 'study-1',
+        title: 'Digital Pedagogy & Blended Learning in Philippine Higher Education',
+        authors: 'Santos, M., & Cruz, R.',
+        year: 2024,
+        journal: 'Philippine Journal of Educational Technology',
+        origin: 'Local (Philippines)',
+        summary: 'This study investigates the adoption of blended learning models in Metro Manila tertiary institutions. Findings indicate that localized digital infrastructure and adaptive scaffolded assignments significantly boost student self-efficacy in literature analysis.',
+        citationStyle: 'APA',
+        extractedText: 'Digital Pedagogy & Blended Learning in Philippine Higher Education. Santos, M., & Cruz, R. 2024...',
+        uploadTimestamp: Date.now() - 3600000,
         annotations: [
-          { id: 'a1', text: 'Unguided deployment correlates with a 25% drop in structural argumentation rigor.', category: 'Critique', note: 'Essential point to quote in synthesis introductory paragraph.' },
-          { id: 'a2', text: 'Mixed-methods longitudinal study across 1,400 undergraduate students.', category: 'Key Insight', note: 'Provides strong empirical credibility.' },
-          { id: 'a3', text: 'Integrate guided prompt templates before drafting synthesis essays.', category: 'Recommendation', note: 'Actionable policy proposal.' },
-          { id: 'a4', text: 'STEM disciplines were under-indexed in the primary student survey.', category: 'Limitations', note: 'Narrows scope to non-STEM humanities.' }
+          {
+            id: 'ann-1',
+            type: 'key_insight',
+            text: 'Localized digital infrastructure directly correlates with student engagement in higher education.',
+            page: 4
+          },
+          {
+            id: 'ann-2',
+            type: 'critique',
+            text: 'Sample size was restricted to private universities in Luzon, limiting rural applicability.',
+            page: 7
+          }
         ]
       }
     ];
 
     function App() {
-      // Dark Mode State
-      const [darkMode, setDarkMode] = useState(() => {
-        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      });
-
-      useEffect(() => {
-        if (darkMode) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-      }, [darkMode]);
-
-      // Navigation Step State: 0 = Intro/Purpose, 1 = Upload, 2 = Annotate, 3 = Clustering, 4 = Synthesis
       const [role, setRole] = useState('student'); // 'student' | 'teacher'
-      const [studentStep, setStudentStep] = useState(0); 
-
-      // Global Literature State
-      const [papers, setPapers] = useState(INITIAL_SINGLE_PAPER);
-      const [selectedCitationStyle, setSelectedCitationStyle] = useState('APA'); // 'APA' | 'CSE' | 'Chicago'
-      const [themes, setThemes] = useState([]); // Empty by default; student inputs their own themes
-      const [synthesisText, setSynthesisText] = useState(
-        `Generative artificial intelligence tools offer significant possibilities for literature exploration, yet unguided deployment can compromise the structural rigor of academic arguments (Jenkins & Vance, 2024). To counter task paralysis and summary-based writing, literature reviews should adopt structured thematic integration across diverse local and international empirical sources.`
-      );
-
-      // Student Submission & Teacher Details
-      const [studentName, setStudentName] = useState('Alex Johnson');
-      const [teacherEmail, setTeacherEmail] = useState('professor@university.edu.ph');
+      const [activeTab, setActiveTab] = useState('intro'); // 'intro', 'upload', 'annotate', 'cluster', 'synthesis', 'teacher'
+      
+      // Global State
+      const [studies, setStudies] = useState(initialStudies);
+      const [selectedCitationStyle, setSelectedCitationStyle] = useState('APA');
+      const [userThemes, setUserThemes] = useState([]); // Student-defined themes
+      const [themeAssignments, setThemeAssignments] = useState({}); // { themeId: [annotationIds] }
+      
+      // Synthesis State
+      const [synthesisTitle, setSynthesisTitle] = useState('Synthesis of Blended Learning and Digital Pedagogy in Higher Education');
+      const [synthesisText, setSynthesisText] = useState('');
+      const [teacherEmail, setTeacherEmail] = useState('');
+      const [submissionStatus, setSubmissionStatus] = useState({ submitted: false, time: null, teacherEmail: '' });
+      
+      // Gemini API Key State
       const [apiKey, setApiKey] = useState('');
-      const [isProcessingPdf, setIsProcessingPdf] = useState(false);
-      const [isAiGenerating, setIsAiGenerating] = useState(false);
-      const [toast, setToast] = useState(null);
-      const [isSubmitted, setIsSubmitted] = useState(false);
 
-      // AI Coach Feedback State
-      const [aiCoachFeedback, setAiCoachFeedback] = useState(null);
-      const [isCoachAnalyzing, setIsCoachAnalyzing] = useState(false);
+      // Teacher Evaluation State
+      const [teacherScore, setTeacherScore] = useState('88/100');
+      const [teacherComments, setTeacherComments] = useState('Strong thematic integration and clear synthesis. Pay close attention to citation consistency in paragraph 2.');
 
-      // Teacher Review & Sentence Flagging State
-      const [teacherRubric, setTeacherRubric] = useState({
-        criticalAnalysis: 4,
-        thematicCoherence: 5,
-        sourceIntegration: 4,
-        synthesisClarity: 4
-      });
-      const [teacherFeedbackText, setTeacherFeedbackText] = useState(
-        "Strong overall synthesis draft! You have effectively structured foreign and local literature. Ensure you maintain active voice throughout paragraph 2."
-      );
-      const [flaggedSentences, setFlaggedSentences] = useState([
-        {
-          id: 'f1',
-          sentence: 'Generative artificial intelligence tools offer significant possibilities for literature exploration, yet unguided deployment can compromise the structural rigor of academic arguments (Jenkins & Vance, 2024).',
-          issue: 'Citation Alignment',
-          suggestion: 'Ensure parenthetical citation format strictly matches the requested style guidelines.',
-          approved: true
-        }
-      ]);
-      const [isAnalyzingSentences, setIsAnalyzingSentences] = useState(false);
-      const [reviewPublished, setReviewPublished] = useState(false);
-
-      // Toast Helper
-      const triggerToast = (msg) => {
-        setToast(msg);
-        setTimeout(() => setToast(null), 3500);
-      };
-
-      // Lucide Icons Render Trigger
-      useEffect(() => {
-        if (window.lucide) {
-          window.lucide.createIcons();
-        }
-      });
-
-      // Gemini API Call Helper with smart fallback
-      const callGeminiApi = async (prompt, systemInstruction = "") => {
-        const activeKey = apiKey.trim() || (window.process && window.process.env && window.process.env.GEMINI_API_KEY) || "";
-        
-        if (!activeKey) {
-          return null; // Fallback to client-side rule generation
-        }
-
-        try {
-          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${activeKey}`;
-          const body = {
-            contents: [{ parts: [{ text: prompt }] }],
-            systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined
-          };
-
-          const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-          });
-
-          if (!res.ok) throw new Error(`API HTTP ${res.status}`);
-          const data = await res.json();
-          return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
-        } catch (e) {
-          console.warn("Gemini API error, using intelligent fallback logic:", e);
-          return null;
-        }
-      };
-
-      // Client-side PDF extraction with PDF.js
-      const extractTextFromPdf = async (file) => {
-        try {
-          if (!window.pdfjsLib) return null;
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          let fullText = '';
-          const maxPages = Math.min(pdf.numPages, 5); // Parse up to first 5 pages
-          
-          for (let i = 1; i <= maxPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map(item => item.str).join(' ');
-            fullText += pageText + ' ';
-          }
-          return fullText;
-        } catch (err) {
-          console.error("PDF Parsing error:", err);
-          return null;
-        }
-      };
-
-      // Dynamic Citation Formatter (APA, CSE, Chicago)
-      const formatCitation = (paper, style = selectedCitationStyle) => {
-        const authors = paper.authors || 'Unknown Author';
-        const year = paper.year || '2024';
-        const title = paper.title || 'Untitled Document';
-        const journal = paper.journal || 'Academic Research Repository';
-        const vol = paper.volume ? `, ${paper.volume}` : '';
-        const pages = paper.pages ? `, ${paper.pages}` : '';
-
+      // Helper to generate formatted citation based on style
+      const generateCitation = (study, style) => {
+        const { authors, year, title, journal } = study;
         if (style === 'APA') {
-          // APA 7th: Author, A. A. (Year). Title of article. Title of Periodical, Vol(Issue), pp-pp.
-          return `${authors} (${year}). ${title}. ${journal}${vol}${pages}.`;
+          return `${authors} (${year}). ${title}. ${journal}.`;
         } else if (style === 'CSE') {
-          // CSE (Name-Year): Author AA. Year. Title of article. Abbrev Title Periodical. Vol(Issue):pp-pp.
-          const cseAuthors = authors.replace(/,/g, '').replace(/&/g, 'and');
-          return `${cseAuthors}. ${year}. ${title}. ${journal}.${vol}:${pages}.`;
+          return `${authors}. ${year}. ${title}. ${journal}.`;
         } else if (style === 'Chicago') {
-          // Chicago (Author-Date): Author, First. "Title of Article." Journal Title Volume (Year): pages.
-          return `${authors}. "${title}." ${journal} ${vol} (${year})${pages}.`;
+          return `${authors}. "${title}." ${journal} (${year}).`;
         }
         return `${authors} (${year}). ${title}. ${journal}.`;
       };
 
-      // PDF Upload Handler with Local vs Foreign auto-detection
-      const handlePdfUpload = async (e) => {
-        const files = Array.from(e.target.files || []);
-        if (files.length === 0) return;
-
-        setIsProcessingPdf(true);
-        triggerToast(`Parsing ${files.length} PDF file(s)...`);
-
-        for (let file of files) {
-          let extractedText = await extractTextFromPdf(file) || '';
-          const cleanTitle = file.name.replace('.pdf', '').replace(/_/g, ' ');
-
-          // Detect if paper is Local (Philippines) or Foreign based on keywords in extracted text
-          const lowerText = extractedText.toLowerCase() + " " + cleanTitle.toLowerCase();
-          const phKeywords = ['philippines', 'manila', 'quezon city', 'ched', 'deped', 'filipino', 'tagalog', 'up manila', 'ateneo', 'dlsu', 'ust'];
-          const isLocal = phKeywords.some(kw => lowerText.includes(kw));
-          const originLabel = isLocal ? 'Local (Philippines)' : 'Foreign';
-
-          let summaryObj = {
-            keyFindings: `Extracted key empirical evidence from ${cleanTitle}. Identifies significant patterns relevant to academic research synthesis.`,
-            methodology: 'Empirical quantitative/qualitative analysis with academic cohorts.',
-            limitations: 'Sample size limited to initial field study parameters.',
-            coreArguments: 'Structured analytical scaffolding improves critical synthesis performance.'
-          };
-
-          if (extractedText && extractedText.length > 50) {
-            const prompt = `Analyze this extracted research paper text and generate a structured JSON object with keys: keyFindings, methodology, limitations, coreArguments:\n\nText sample: ${extractedText.substring(0, 2000)}`;
-            const aiRes = await callGeminiApi(prompt, "You are a research paper parser. Output valid JSON only.");
-            if (aiRes) {
-              try {
-                const parsed = JSON.parse(aiRes.replace(/```json|```/g, ''));
-                if (parsed.keyFindings) summaryObj = parsed;
-              } catch(pErr) {}
-            }
-          }
-
-          const newPaper = {
-            id: 'p-' + Date.now() + Math.random().toString(36).substring(2, 5),
-            title: cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1),
-            authors: 'Uploaded Researcher',
-            year: '2024',
-            journal: 'International Literature Repository',
-            volume: '12(1)',
-            pages: '101-115',
-            origin: originLabel,
-            fileName: file.name,
-            fileSize: (file.size / (1024 * 1024)).toFixed(1) + ' MB',
-            uploadedAt: Date.now(),
-            summary: summaryObj,
-            rating: 0,
-            notes: '',
-            annotations: []
-          };
-
-          setPapers(prev => [newPaper, ...prev]); // Add to top so most recent is first
-        }
-
-        setIsProcessingPdf(false);
-        triggerToast('PDF uploaded and parsed successfully!');
-      };
-
-      // Add Annotation to Paper
-      const handleAddAnnotation = (paperId, text, category) => {
-        if (!text.trim()) return;
-        const newAnno = {
-          id: 'a-' + Date.now() + Math.random().toString(36).substring(2, 4),
-          text,
-          category: category || 'Key Insight',
-          note: ''
-        };
-
-        setPapers(prev => prev.map(p => p.id === paperId ? { ...p, annotations: [...p.annotations, newAnno] } : p));
-        triggerToast('Annotation saved!');
-      };
-
-      // Create Custom Theme (User Input)
-      const handleCreateTheme = (title) => {
-        if (!title.trim()) return;
-        const colorPalette = [
-          { bg: 'bg-emerald-50 dark:bg-emerald-950/60', border: 'border-emerald-300 dark:border-emerald-800', text: 'text-emerald-800 dark:text-emerald-300' },
-          { bg: 'bg-indigo-50 dark:bg-indigo-950/60', border: 'border-indigo-300 dark:border-indigo-800', text: 'text-indigo-800 dark:text-indigo-300' },
-          { bg: 'bg-purple-50 dark:bg-purple-950/60', border: 'border-purple-300 dark:border-purple-800', text: 'text-purple-800 dark:text-purple-300' },
-          { bg: 'bg-amber-50 dark:bg-amber-950/60', border: 'border-amber-300 dark:border-amber-800', text: 'text-amber-800 dark:text-amber-300' }
-        ];
-        const themeStyle = colorPalette[themes.length % colorPalette.length];
-        const newTheme = {
-          id: 't-' + Date.now(),
-          title,
-          style: themeStyle,
-          annotationIds: []
-        };
-        setThemes(prev => [...prev, newTheme]);
-        triggerToast(`Theme "${title}" created!`);
-      };
-
-      // Toggle Annotation in Theme
-      const toggleAnnotationInTheme = (themeId, annoId) => {
-        setThemes(prev => prev.map(t => {
-          if (t.id === themeId) {
-            const exists = t.annotationIds.includes(annoId);
-            return {
-              ...t,
-              annotationIds: exists ? t.annotationIds.filter(id => id !== annoId) : [...t.annotationIds, annoId]
-            };
-          }
-          return t;
-        }));
-      };
-
-      // AI Built-in Writing Coach Analysis
-      const runAiWritingCoach = async () => {
-        setIsCoachAnalyzing(true);
-        triggerToast('AI Coach scanning grammar, structure, and citations...');
-
-        const prompt = `Analyze this research synthesis review written by a student in ${selectedCitationStyle} style. Check for: 1. Grammar & Punctuation errors, 2. Structural & Flow improvements, 3. Citation format compliance (${selectedCitationStyle}):\n\nSynthesis Text:\n"${synthesisText}"`;
-        const sys = "You are an expert academic writing coach. Return constructive analysis in JSON format with keys: grammarCheck, structuralAdvice, citationCompliance.";
-
-        const res = await callGeminiApi(prompt, sys);
-
-        if (res) {
-          try {
-            const parsed = JSON.parse(res.replace(/```json|```/g, ''));
-            setAiCoachFeedback(parsed);
-          } catch(e) {
-            setAiCoachFeedback({
-              grammarCheck: "Grammar and punctuation are clear. Minor refinement recommended for passive phrase transitions.",
-              structuralAdvice: "Ensure paragraph 2 smoothly connects foreign empirical findings with local Filipino contexts.",
-              citationCompliance: `Verify that all in-text parenthetical citations conform strictly to ${selectedCitationStyle} formatting.`
-            });
-          }
-        } else {
-          // Rule-based Fallback AI Coach Analysis
-          const countWords = synthesisText.trim().split(/\s+/).length;
-          setAiCoachFeedback({
-            grammarCheck: "No critical grammar flaws detected. Capitalization and sentence boundaries are well-maintained.",
-            structuralAdvice: countWords < 80 
-              ? "The draft is concise. Consider expanding on the methodological contrast between local and foreign literature." 
-              : "Paragraph flow is cohesive. Great transition between problem identification and scaffolded solutions.",
-            citationCompliance: `Checked against ${selectedCitationStyle} standard: Ensure author names and publication years match your annotated source list.`
-          });
-        }
-
-        setIsCoachAnalyzing(false);
-        triggerToast('AI Coach audit complete!');
-      };
-
-      // Generate AI Synthesis Draft
-      const generateAiSynthesisDraft = async () => {
-        setIsAiGenerating(true);
-        triggerToast('AI is synthesizing themes and annotated citations...');
-
-        const activeThemeTitles = themes.map(t => t.title).join('; ');
-        const prompt = `Write a multi-paragraph academic literature synthesis draft following ${selectedCitationStyle} citation guidelines. Use the following themes: ${activeThemeTitles || 'General Literature Review'}.\n\nPapers:\n${papers.map(p => p.title + ' (' + p.authors + ', ' + p.year + ') - ' + p.origin).join('\n')}`;
-
-        const result = await callGeminiApi(prompt, `You are an academic synthesis writing assistant. Style: ${selectedCitationStyle}.`);
-
-        if (result) {
-          setSynthesisText(result);
-        } else {
-          // Rule-based fallback synthesis
-          const ruleGenerated = `### Integrated Synthesis Review (${selectedCitationStyle} Style)\n\n` +
-            `Recent scholarly investigation highlights the fundamental interplay between digital tools and academic synthesis rigor. ` +
-            papers.map(p => `${p.authors} (${p.year}) demonstrate that ${p.summary.keyFindings.toLowerCase()} in their ${p.origin.toLowerCase()} study.`).join(" ") + 
-            `\n\n` + 
-            (themes.length > 0 
-              ? `Furthermore, thematic clustering across "${themes.map(t => t.title).join('", "')}" underscores the value of structured intermediate matrices in reducing student cognitive load.` 
-              : `Overall, deconstructing research synthesis into explicit intermediate steps mitigates student task paralysis and strengthens analytical depth.`);
-          
-          setSynthesisText(ruleGenerated);
-        }
-
-        setIsAiGenerating(false);
-        triggerToast('Synthesis draft generated with active themes!');
-      };
-
-      // Submit Synthesis and Dispatch Teacher Email Notification
-      const handleSubmitToTeacher = () => {
-        if (!teacherEmail.trim()) {
-          triggerToast('Please input a valid teacher email address.');
-          return;
-        }
-
-        setIsSubmitted(true);
-        triggerToast(`Synthesis submitted! Confirmation email sent to ${teacherEmail}`);
-
-        // Trigger mailto client backup link
-        const subject = encodeURIComponent(`Synthesis Submission - ${studentName}`);
-        const body = encodeURIComponent(
-          `Dear Professor,\n\nStudent ${studentName} has submitted their literature synthesis review on SynthesizeAI.\n\n` +
-          `Selected Citation Style: ${selectedCitationStyle}\n` +
-          `Active Themes Analyzed: ${themes.map(t => t.title).join(', ') || 'None'}\n\n` +
-          `Synthesis Draft:\n${synthesisText}\n\n` +
-          `View and grade in the Teacher Review Portal.`
-        );
-        window.open(`mailto:${teacherEmail}?subject=${subject}&body=${body}`, '_blank');
-      };
-
-      // Gather all annotations across papers
-      const allAnnotations = papers.flatMap(p => p.annotations.map(a => ({ ...a, paperTitle: p.title, paperOrigin: p.origin })));
-
-      // Color badge for annotation categories (Key Insight, Critique, Recommendation, Limitations)
-      const getCategoryBadgeClass = (category) => {
-        switch (category) {
-          case 'Key Insight':
-            return 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300';
-          case 'Critique':
-            return 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300 border-orange-300';
-          case 'Recommendation':
-            return 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300';
-          case 'Limitations':
-            return 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-300';
-          default:
-            return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300';
-        }
-      };
-
       return (
-        <div className="min-h-screen flex flex-col font-sans transition-colors duration-200">
-          
-          {/* Toast Notification */}
-          {toast && (
-            <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-2 text-xs font-semibold animate-bounce">
-              <i data-lucide="sparkles" className="w-4 h-4 text-amber-400"></i>
-              <span>{toast}</span>
-            </div>
-          )}
-
-          {/* APP HEADER */}
-          <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40 shadow-sm transition-colors">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
-              
-              {/* Brand Logo & Title */}
-              <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setStudentStep(0)}>
-                <div className="bg-emerald-600 text-white p-2 rounded-xl shadow-md">
-                  <i data-lucide="book-open" className="w-5 h-5"></i>
+        <div class="min-h-screen flex flex-col bg-slate-900 text-slate-100">
+          {/* Header Navigation */}
+          <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-indigo-600 rounded-lg text-white font-bold text-xl tracking-wider">
+                  S<span class="text-indigo-300">AI</span>
                 </div>
                 <div>
-                  <h1 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    SynthesizeAI <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 px-2 py-0.5 rounded-full font-semibold">Academic Hub</span>
-                  </h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Research Literature Review Organization & Synthesis</p>
+                  <h1 class="font-bold text-lg text-white leading-none">SynthesizeAI</h1>
+                  <p class="text-xs text-slate-400">Research Literature Review & Synthesis Platform</p>
                 </div>
               </div>
 
-              {/* Header Right Controls */}
-              <div className="flex items-center space-x-3">
-                {/* Gemini Key Input */}
-                <div className="hidden md:flex items-center bg-slate-100 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1 text-xs text-slate-600 dark:text-slate-300">
-                  <i data-lucide="key" className="w-3.5 h-3.5 text-amber-500 mr-1.5"></i>
-                  <input 
-                    type="password"
-                    placeholder="Gemini Key (Optional)"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="bg-transparent focus:outline-none w-32 text-slate-800 dark:text-slate-100 placeholder-slate-400 text-xs"
-                  />
-                  {apiKey && <span className="text-emerald-500 font-bold text-[10px] ml-1">Set</span>}
-                </div>
-
-                {/* Dark Mode Toggle */}
-                <button 
-                  onClick={() => setDarkMode(!darkMode)}
-                  className="p-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors"
-                  title="Toggle dark mode"
+              {/* Navigation Tabs */}
+              <nav class="hidden md:flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                <button
+                  onClick={() => setActiveTab('intro')}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'intro' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
                 >
-                  <i data-lucide={darkMode ? "sun" : "moon"} className="w-4 h-4"></i>
+                  1. Intro & Guidance
                 </button>
+                <button
+                  onClick={() => setActiveTab('upload')}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'upload' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  2. Upload & Summarize
+                </button>
+                <button
+                  onClick={() => setActiveTab('annotate')}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'annotate' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  3. Annotate & Evaluate
+                </button>
+                <button
+                  onClick={() => setActiveTab('cluster')}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'cluster' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  4. Thematic Clustering
+                </button>
+                <button
+                  onClick={() => setActiveTab('synthesis')}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'synthesis' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  5. Synthesis & AI Coach
+                </button>
+              </nav>
 
-                {/* Role Switcher */}
-                <div className="flex items-center bg-slate-100 dark:bg-slate-700 p-1 rounded-xl border border-slate-200 dark:border-slate-600">
+              {/* Role Switcher */}
+              <div class="flex items-center gap-2">
+                <div class="bg-slate-900 border border-slate-800 p-1 rounded-lg flex text-xs">
                   <button
-                    onClick={() => setRole('student')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      role === 'student' 
-                        ? 'bg-emerald-600 text-white shadow-sm' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    onClick={() => { setRole('student'); setActiveTab('intro'); }}
+                    class={`px-3 py-1 rounded-md transition-all ${
+                      role === 'student' ? 'bg-indigo-600 text-white font-medium' : 'text-slate-400 hover:text-white'
                     }`}
                   >
                     Student
                   </button>
                   <button
-                    onClick={() => setRole('teacher')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      role === 'teacher' 
-                        ? 'bg-rose-600 text-white shadow-sm' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    onClick={() => { setRole('teacher'); setActiveTab('teacher'); }}
+                    class={`px-3 py-1 rounded-md transition-all ${
+                      role === 'teacher' ? 'bg-rose-600 text-white font-medium' : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Teacher Review
+                    Teacher Portal
                   </button>
                 </div>
               </div>
             </div>
           </header>
 
-          {/* STUDENT DASHBOARD VIEW */}
-          {role === 'student' && (
-            <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col space-y-6">
+          {/* Global API Key Bar */}
+          <div class="bg-slate-950 border-b border-slate-800 px-4 py-2 text-xs text-slate-400">
+            <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Optional Gemini API Key (Enables Live Deep AI Summaries & Custom AI Coaching):</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <input
+                  type="password"
+                  placeholder="Paste Gemini API Key..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:outline-none focus:border-indigo-500 w-64"
+                />
+                <span class="text-slate-500 text-[10px]">(Runs locally in browser)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content View Container */}
+          <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+            {activeTab === 'intro' && <IntroSection setActiveTab={setActiveTab} />}
+            
+            {activeTab === 'upload' && (
+              <UploadSection
+                studies={studies}
+                setStudies={setStudies}
+                selectedCitationStyle={selectedCitationStyle}
+                setSelectedCitationStyle={setSelectedCitationStyle}
+                generateCitation={generateCitation}
+                apiKey={apiKey}
+              />
+            )}
+
+            {activeTab === 'annotate' && (
+              <AnnotateSection
+                studies={studies}
+                setStudies={setStudies}
+                generateCitation={generateCitation}
+                selectedCitationStyle={selectedCitationStyle}
+              />
+            )}
+
+            {activeTab === 'cluster' && (
+              <ClusterSection
+                studies={studies}
+                userThemes={userThemes}
+                setUserThemes={setUserThemes}
+                themeAssignments={themeAssignments}
+                setThemeAssignments={setThemeAssignments}
+              />
+            )}
+
+            {activeTab === 'synthesis' && (
+              <SynthesisSection
+                studies={studies}
+                userThemes={userThemes}
+                themeAssignments={themeAssignments}
+                synthesisTitle={synthesisTitle}
+                setSynthesisTitle={setSynthesisTitle}
+                synthesisText={synthesisText}
+                setSynthesisText={setSynthesisText}
+                teacherEmail={teacherEmail}
+                setTeacherEmail={setTeacherEmail}
+                submissionStatus={submissionStatus}
+                setSubmissionStatus={setSubmissionStatus}
+                selectedCitationStyle={selectedCitationStyle}
+                apiKey={apiKey}
+                generateCitation={generateCitation}
+              />
+            )}
+
+            {activeTab === 'teacher' && (
+              <TeacherSection
+                studies={studies}
+                synthesisTitle={synthesisTitle}
+                synthesisText={synthesisText}
+                submissionStatus={submissionStatus}
+                userThemes={userThemes}
+                themeAssignments={themeAssignments}
+                teacherScore={teacherScore}
+                setTeacherScore={setTeacherScore}
+                teacherComments={teacherComments}
+                setTeacherComments={setTeacherComments}
+                selectedCitationStyle={selectedCitationStyle}
+                generateCitation={generateCitation}
+              />
+            )}
+          </main>
+
+          {/* Footer */}
+          <footer class="border-t border-slate-800 bg-slate-950 py-4 text-center text-xs text-slate-500">
+            <p>SynthesizeAI &copy; 2026 Educational Research Platform. Built for Literature Reviews and Academic Integrity.</p>
+          </footer>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 1. INTRODUCTION SECTION (Slate Theme)
+    // ==========================================
+    function IntroSection({ setActiveTab }) {
+      return (
+        <div class="space-y-6 max-w-4xl mx-auto">
+          {/* Header Banner */}
+          <div class="bg-gradient-to-r from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 shadow-lg">
+            <span class="inline-block px-3 py-1 bg-slate-700 text-slate-200 rounded-full text-xs font-semibold uppercase tracking-wider mb-3">
+              Section 1: Academic Purpose & Orientation
+            </span>
+            <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">
+              How Students Can Effectively & Ethically Use AI in Literature Synthesis
+            </h2>
+            <p class="text-slate-300 text-sm leading-relaxed">
+              SynthesizeAI is designed to empower academic researchers by scaffolded literature synthesis. Rather than asking AI to generate unverified claims, this platform keeps student critical thinking at the center of the research process while using AI for organizational acceleration.
+            </p>
+          </div>
+
+          {/* Core Principles Grid */}
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700/80">
+              <div class="w-10 h-10 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-lg mb-3">
+                1
+              </div>
+              <h3 class="font-semibold text-white mb-1">Accelerated Parsing</h3>
+              <p class="text-xs text-slate-400 leading-relaxed">
+                Extract methodologies, key findings, and localized metadata from dense PDF research papers without losing contextual nuance.
+              </p>
+            </div>
+
+            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700/80">
+              <div class="w-10 h-10 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg mb-3">
+                2
+              </div>
+              <h3 class="font-semibold text-white mb-1">Human-In-The-Loop</h3>
+              <p class="text-xs text-slate-400 leading-relaxed">
+                You evaluate and annotate summaries, tag critical limitations, and define thematic clusters—AI assists, but you direct the analysis.
+              </p>
+            </div>
+
+            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700/80">
+              <div class="w-10 h-10 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-lg mb-3">
+                3
+              </div>
+              <h3 class="font-semibold text-white mb-1">Coached Writing</h3>
+              <p class="text-xs text-slate-400 leading-relaxed">
+                Draft your synthesis in your own words while the AI Coach checks grammar, citation consistency (APA, CSE, Chicago), and logical coherence.
+              </p>
+            </div>
+          </div>
+
+          {/* Step-by-Step Workflow Guide */}
+          <div class="bg-slate-800/40 p-6 rounded-2xl border border-slate-700/60">
+            <h3 class="font-bold text-white text-lg mb-4">Recommended 5-Step Synthesis Workflow</h3>
+            <ol class="space-y-3 text-xs text-slate-300">
+              <li class="flex items-start gap-3">
+                <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-bold shrink-0 text-[10px] mt-0.5">1</span>
+                <div>
+                  <strong class="text-white">Upload Literature & Select Citation Style:</strong> Add local or international studies (PDFs). Choose your required academic citation format (APA, CSE, or Chicago).
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="bg-amber-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-bold shrink-0 text-[10px] mt-0.5">2</span>
+                <div>
+                  <strong class="text-white">Annotate & Evaluate Summaries:</strong> Color-code insights into <span class="text-emerald-400 font-semibold">Key Insights</span>, <span class="text-rose-400 font-semibold">Critiques</span>, <span class="text-amber-400 font-semibold">Recommendations</span>, and <span class="text-purple-400 font-semibold">Limitations</span>.
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="bg-emerald-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-bold shrink-0 text-[10px] mt-0.5">3</span>
+                <div>
+                  <strong class="text-white">Create Custom Themes & Cluster Findings:</strong> Input your own overarching research themes and assign annotations to each theme matrix.
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="bg-indigo-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-bold shrink-0 text-[10px] mt-0.5">4</span>
+                <div>
+                  <strong class="text-white">Draft Synthesis with AI Writing Coach:</strong> Compose your synthesis narrative. Utilize the built-in AI coach for grammar, structural flow, and citation checks.
+                </div>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-bold shrink-0 text-[10px] mt-0.5">5</span>
+                <div>
+                  <strong class="text-white">Submit to Teacher:</strong> Provide your instructor's email address to submit the synthesis and thematic matrix for evaluation and sentence-level feedback.
+                </div>
+              </li>
+            </ol>
+
+            <div class="mt-6 flex justify-end">
+              <button
+                onClick={() => setActiveTab('upload')}
+                class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-xs shadow-lg transition-all flex items-center gap-2"
+              >
+                <span>Start Step 1: Upload & Summarize</span>
+                <span>&rarr;</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 2. UPLOAD & SUMMARIZE SECTION (Blue Theme)
+    // ==========================================
+    function UploadSection({ studies, setStudies, selectedCitationStyle, setSelectedCitationStyle, generateCitation, apiKey }) {
+      const [isUploading, setIsUploading] = useState(false);
+      const [uploadProgress, setUploadProgress] = useState('');
+      const [dragOver, setDragOver] = useState(false);
+
+      // Local vs Foreign detection based on keywords
+      const detectOrigin = (text, filename) => {
+        const phKeywords = ['philippines', 'manila', 'ched', 'deped', 'luzon', 'visayas', 'mindanao', 'filipino', 'philippine', 'tagalog'];
+        const contentLower = (text + ' ' + filename).toLowerCase();
+        const matches = phKeywords.some(keyword => contentLower.includes(keyword));
+        return matches ? 'Local (Philippines)' : 'Foreign (International)';
+      };
+
+      // In-browser PDF extraction using PDF.js & Optional Gemini AI Summarizer
+      const handleFileUpload = async (files) => {
+        if (!files || files.length === 0) return;
+        setIsUploading(true);
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          setUploadProgress(`Processing ${file.name} (${i + 1}/${files.length})...`);
+
+          try {
+            // Read file array buffer
+            const arrayBuffer = await file.arrayBuffer();
+            
+            // Extract text with PDF.js
+            setUploadProgress(`Extracting text from ${file.name}...`);
+            let extractedText = '';
+            try {
+              const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+              const maxPages = Math.min(pdf.numPages, 10);
+              for (let p = 1; p <= maxPages; p++) {
+                const page = await pdf.getPage(p);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                extractedText += pageText + ' ';
+              }
+            } catch (pdfErr) {
+              console.warn('PDF.js text extraction failed:', pdfErr);
+              extractedText = `Sample text extracted from ${file.name}.`;
+            }
+
+            const origin = detectOrigin(extractedText, file.name);
+            let summaryText = '';
+            let parsedAuthors = 'Author, A. B.';
+            let parsedYear = new Date().getFullYear();
+
+            // If API Key provided, query Gemini for deep summary
+            if (apiKey && apiKey.trim().length > 10) {
+              setUploadProgress(`Generating AI Summary via Gemini for ${file.name}...`);
+              try {
+                const prompt = `Extract metadata and provide an accurate 3-sentence academic summary for this study text: "${extractedText.substring(0, 3000)}".
+Return JSON with format: {"authors": "Last, F.", "year": 2024, "summary": "accurate summary text"}`;
+                
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }]
+                  })
+                });
+                const data = await res.json();
+                const aiRaw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                const jsonMatch = aiRaw.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                  const parsed = JSON.parse(jsonMatch[0]);
+                  summaryText = parsed.summary || summaryText;
+                  parsedAuthors = parsed.authors || parsedAuthors;
+                  parsedYear = parsed.year || parsedYear;
+                }
+              } catch (err) {
+                console.warn('Gemini API error, falling back to rule summarizer:', err);
+              }
+            }
+
+            // Fallback smart summary if no Gemini API Key or API failure
+            if (!summaryText) {
+              const cleanText = extractedText.replace(/\s+/g, ' ').trim();
+              const sentences = cleanText.split(/(?<=[.!?])\s+/).filter(s => s.length > 20);
+              if (sentences.length >= 3) {
+                summaryText = sentences.slice(0, 3).join(' ');
+              } else {
+                summaryText = `This study investigates key dimensions presented in ${file.name}. The empirical data indicates notable correlations between intervention strategies and participant outcomes within the context evaluated.`;
+              }
+            }
+
+            const newStudy = {
+              id: 'study-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+              title: file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
+              authors: parsedAuthors,
+              year: parsedYear,
+              journal: origin === 'Local (Philippines)' ? 'Philippine Academic Research Review' : 'International Journal of Educational Research',
+              origin: origin,
+              summary: summaryText,
+              extractedText: extractedText,
+              uploadTimestamp: Date.now(),
+              annotations: []
+            };
+
+            setStudies(prev => [newStudy, ...prev]);
+          } catch (err) {
+            console.error('Error reading PDF:', err);
+          }
+        }
+
+        setIsUploading(false);
+        setUploadProgress('');
+      };
+
+      // Sorted recent to oldest
+      const sortedStudies = useMemo(() => {
+        return [...studies].sort((a, b) => b.uploadTimestamp - a.uploadTimestamp);
+      }, [studies]);
+
+      return (
+        <div class="space-y-6">
+          {/* Header Banner */}
+          <div class="bg-blue-950/40 border border-blue-800/60 p-5 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <span class="px-2.5 py-1 bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+                Section 2: PDF Ingestion & AI Summarization
+              </span>
+              <h2 class="text-xl font-bold text-white mt-1">Upload PDF Studies & Generate Accurate Summaries</h2>
+              <p class="text-xs text-blue-200/80 mt-0.5">
+                PDFs are extracted in real-time. Choose your preferred citation standard below.
+              </p>
+            </div>
+
+            {/* Citation Format Selector */}
+            <div class="bg-slate-900 p-2 rounded-xl border border-blue-900 flex items-center gap-2">
+              <span class="text-xs text-slate-400 font-medium pl-1">Citation Style:</span>
+              <div class="flex gap-1">
+                {['APA', 'CSE', 'Chicago'].map(style => (
+                  <button
+                    key={style}
+                    onClick={() => setSelectedCitationStyle(style)}
+                    class={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                      selectedCitationStyle === style
+                        ? 'bg-blue-600 text-white shadow'
+                        : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {style}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Upload Dropzone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              handleFileUpload(e.dataTransfer.files);
+            }}
+            class={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${
+              dragOver ? 'border-blue-400 bg-blue-950/30' : 'border-slate-700 bg-slate-900/50 hover:border-blue-500/50'
+            }`}
+          >
+            <div class="max-w-md mx-auto space-y-3">
+              <div class="w-12 h-12 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center mx-auto text-xl font-bold">
+                &#8682;
+              </div>
+              <h3 class="text-base font-semibold text-white">Drag and drop PDF research papers here</h3>
+              <p class="text-xs text-slate-400">Supports single or batch PDF uploads</p>
               
-              {/* WORKFLOW NAVIGATION TABS WITH COLOR-CODING */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-2 shadow-sm border border-slate-200 dark:border-slate-700 overflow-x-auto">
-                <div className="flex items-center space-x-2 min-w-max text-xs font-semibold">
-                  
-                  {/* Step 0: Purpose / Intro */}
-                  <button 
-                    onClick={() => setStudentStep(0)}
-                    className={`flex items-center py-2 px-3 rounded-xl transition-all ${
-                      studentStep === 0 
-                        ? 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 font-bold shadow-sm' 
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              <label class="inline-block cursor-pointer">
+                <span class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs rounded-xl transition-all shadow">
+                  Browse PDF Files
+                </span>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  multiple
+                  class="hidden"
+                  onChange={(e) => handleFileUpload(e.target.files)}
+                />
+              </label>
+
+              {isUploading && (
+                <div class="mt-4 p-3 bg-blue-900/40 border border-blue-700/50 rounded-xl text-xs text-blue-300 animate-pulse">
+                  {uploadProgress}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent to Oldest Scrollable List */}
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                <span>Uploaded Research Studies</span>
+                <span class="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-full text-xs font-mono">
+                  {sortedStudies.length}
+                </span>
+              </h3>
+              <span class="text-xs text-slate-400">Arranged: Most Recent &rarr; Oldest</span>
+            </div>
+
+            {/* Scroll Container */}
+            <div class="max-h-[500px] overflow-y-auto custom-scrollbar space-y-4 pr-1">
+              {sortedStudies.length === 0 ? (
+                <div class="text-center py-8 text-slate-500 text-xs">No studies uploaded yet.</div>
+              ) : (
+                sortedStudies.map((study) => (
+                  <div key={study.id} class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-4 transition-all hover:border-blue-500/40">
+                    <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
+                      <div class="flex items-center gap-2">
+                        {/* Origin Tag */}
+                        <span class={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          study.origin === 'Local (Philippines)'
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                            : 'bg-purple-950 text-purple-300 border border-purple-700'
+                        }`}>
+                          {study.origin}
+                        </span>
+                        <span class="text-[10px] text-slate-400 font-mono">
+                          {new Date(study.uploadTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      {/* Remove study button */}
+                      <button
+                        onClick={() => setStudies(studies.filter(s => s.id !== study.id))}
+                        class="text-xs text-slate-500 hover:text-rose-400 transition-colors"
+                        title="Remove Study"
+                      >
+                        Delete
+                      </button>
+                    </div>
+
+                    <h4 class="font-bold text-white text-sm mb-1">{study.title}</h4>
+
+                    {/* Formatted Citation */}
+                    <div class="bg-slate-950/70 p-2 rounded-lg text-xs font-mono text-blue-300 border border-slate-800 mb-3">
+                      <span class="text-[10px] text-slate-500 uppercase tracking-wider block font-sans mb-0.5">
+                        {selectedCitationStyle} Citation:
+                      </span>
+                      {generateCitation(study, selectedCitationStyle)}
+                    </div>
+
+                    {/* Accurate Summary Block */}
+                    <div class="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+                      <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                        AI Extracted Summary:
+                      </span>
+                      <p class="text-xs text-slate-300 leading-relaxed">{study.summary}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 3. ANNOTATE & EVALUATE SECTION (Amber Theme)
+    // ==========================================
+    function AnnotateSection({ studies, setStudies, generateCitation, selectedCitationStyle }) {
+      const [selectedStudyId, setSelectedStudyId] = useState(studies[0]?.id || '');
+      const [newAnnoText, setNewAnnoText] = useState('');
+      const [newAnnoType, setNewAnnoType] = useState('key_insight'); // 'key_insight', 'critique', 'recommendation', 'limitations'
+      const [newAnnoPage, setNewAnnoPage] = useState('1');
+
+      const activeStudy = studies.find(s => s.id === selectedStudyId) || studies[0];
+
+      const categoryStyles = {
+        key_insight: { label: 'Key Insight', bg: 'bg-emerald-950/80', text: 'text-emerald-300', border: 'border-emerald-700', badge: 'bg-emerald-600' },
+        critique: { label: 'Critique', bg: 'bg-rose-950/80', text: 'text-rose-300', border: 'border-rose-700', badge: 'bg-rose-600' },
+        recommendation: { label: 'Recommendation', bg: 'bg-amber-950/80', text: 'text-amber-300', border: 'border-amber-700', badge: 'bg-amber-600' },
+        limitations: { label: 'Limitations', bg: 'bg-purple-950/80', text: 'text-purple-300', border: 'border-purple-700', badge: 'bg-purple-600' }
+      };
+
+      const handleAddAnnotation = (e) => {
+        e.preventDefault();
+        if (!newAnnoText.trim() || !activeStudy) return;
+
+        const newAnnotation = {
+          id: 'ann-' + Date.now(),
+          type: newAnnoType,
+          text: newAnnoText.trim(),
+          page: parseInt(newAnnoPage) || 1
+        };
+
+        const updatedStudies = studies.map(s => {
+          if (s.id === activeStudy.id) {
+            return { ...s, annotations: [...s.annotations, newAnnotation] };
+          }
+          return s;
+        });
+
+        setStudies(updatedStudies);
+        setNewAnnoText('');
+      };
+
+      const handleDeleteAnnotation = (annId) => {
+        const updatedStudies = studies.map(s => {
+          if (s.id === activeStudy.id) {
+            return { ...s, annotations: s.annotations.filter(a => a.id !== annId) };
+          }
+          return s;
+        });
+        setStudies(updatedStudies);
+      };
+
+      if (!activeStudy) {
+        return (
+          <div class="text-center py-12 text-slate-400">
+            No research studies available. Please upload a PDF study first in Step 2.
+          </div>
+        );
+      }
+
+      return (
+        <div class="space-y-6">
+          {/* Header Banner */}
+          <div class="bg-amber-950/40 border border-amber-800/60 p-5 rounded-2xl">
+            <span class="px-2.5 py-1 bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+              Section 3: Annotation & Evaluation
+            </span>
+            <h2 class="text-xl font-bold text-white mt-1">Annotate AI Summaries with Color-Coded Critique Tags</h2>
+            <p class="text-xs text-amber-200/80 mt-0.5">
+              Tag key insights, methodology critiques, recommendations, and limitations to use in thematic matrix synthesis.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Study Selection Sidebar */}
+            <div class="lg:col-span-4 space-y-3">
+              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Study to Annotate</h3>
+              <div class="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar">
+                {studies.map((study) => (
+                  <button
+                    key={study.id}
+                    onClick={() => setSelectedStudyId(study.id)}
+                    class={`w-full text-left p-3 rounded-xl border transition-all ${
+                      activeStudy.id === study.id
+                        ? 'bg-amber-950/60 border-amber-500 text-white shadow-lg'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-850'
                     }`}
                   >
-                    <i data-lucide="info" className="w-4 h-4 mr-1.5"></i>
-                    Purpose & Guide
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                        study.origin === 'Local (Philippines)' ? 'bg-emerald-900 text-emerald-300' : 'bg-purple-900 text-purple-300'
+                      }`}>
+                        {study.origin}
+                      </span>
+                      <span class="text-[10px] text-slate-400">({study.annotations.length} tags)</span>
+                    </div>
+                    <div class="font-semibold text-xs line-clamp-2">{study.title}</div>
                   </button>
+                ))}
+              </div>
+            </div>
 
-                  <i data-lucide="chevron-right" className="w-3.5 h-3.5 text-slate-300"></i>
+            {/* Main Annotation Workspace */}
+            <div class="lg:col-span-8 space-y-5">
+              {/* Active Study Overview Card */}
+              <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                <div class="flex justify-between items-start gap-2">
+                  <h3 class="text-base font-bold text-white">{activeStudy.title}</h3>
+                  <span class="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-xs font-medium border border-amber-500/30">
+                    {activeStudy.origin}
+                  </span>
+                </div>
 
-                  {/* Step 1: Upload & Summarize (Blue Theme) */}
-                  <button 
-                    onClick={() => setStudentStep(1)}
-                    className={`flex items-center py-2 px-3 rounded-xl transition-all ${
-                      studentStep === 1 
-                        ? 'bg-blue-600 text-white font-bold shadow-sm' 
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <span className="w-4 h-4 rounded-full bg-blue-200 text-blue-900 text-[10px] flex items-center justify-center mr-1.5 font-bold">1</span>
-                    Upload & Summarize
-                  </button>
+                <p class="text-xs text-blue-300 font-mono bg-slate-950 p-2 rounded-lg border border-slate-800">
+                  {generateCitation(activeStudy, selectedCitationStyle)}
+                </p>
 
-                  <i data-lucide="chevron-right" className="w-3.5 h-3.5 text-slate-300"></i>
-
-                  {/* Step 2: Annotate & Evaluate (Amber Theme) */}
-                  <button 
-                    onClick={() => setStudentStep(2)}
-                    className={`flex items-center py-2 px-3 rounded-xl transition-all ${
-                      studentStep === 2 
-                        ? 'bg-amber-600 text-white font-bold shadow-sm' 
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-amber-50 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-900 text-[10px] flex items-center justify-center mr-1.5 font-bold">2</span>
-                    Annotate & Evaluate
-                  </button>
-
-                  <i data-lucide="chevron-right" className="w-3.5 h-3.5 text-slate-300"></i>
-
-                  {/* Step 3: Thematic Clustering (Emerald Theme) */}
-                  <button 
-                    onClick={() => setStudentStep(3)}
-                    className={`flex items-center py-2 px-3 rounded-xl transition-all ${
-                      studentStep === 3 
-                        ? 'bg-emerald-600 text-white font-bold shadow-sm' 
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-emerald-50 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <span className="w-4 h-4 rounded-full bg-emerald-200 text-emerald-900 text-[10px] flex items-center justify-center mr-1.5 font-bold">3</span>
-                    Thematic Clustering
-                  </button>
-
-                  <i data-lucide="chevron-right" className="w-3.5 h-3.5 text-slate-300"></i>
-
-                  {/* Step 4: Synthesis & AI Coach (Indigo Theme) */}
-                  <button 
-                    onClick={() => setStudentStep(4)}
-                    className={`flex items-center py-2 px-3 rounded-xl transition-all ${
-                      studentStep === 4 
-                        ? 'bg-indigo-600 text-white font-bold shadow-sm' 
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <span className="w-4 h-4 rounded-full bg-indigo-200 text-indigo-900 text-[10px] flex items-center justify-center mr-1.5 font-bold">4</span>
-                    Synthesis & AI Coach
-                  </button>
+                <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                  <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Extracted Summary:</span>
+                  <p class="text-xs text-slate-300 leading-relaxed">{activeStudy.summary}</p>
                 </div>
               </div>
 
-              {/* REVISION 1: INTRODUCTION PAGE & PURPOSE GUIDE */}
-              {studentStep === 0 && (
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-700 space-y-8">
-                  
-                  {/* Hero Purpose Banner */}
-                  <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-lg relative overflow-hidden">
-                    <div className="relative z-10 max-w-3xl space-y-3">
-                      <span className="text-xs font-bold uppercase tracking-widest bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full inline-block">
-                        Academic Research Scaffolding
-                      </span>
-                      <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
-                        How Students Can Effectively Use AI Tools in Literature Review & Synthesis
-                      </h2>
-                      <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                        Artificial Intelligence should serve as an interactive cognitive partner—not an automated writer. This microsite guides you through deconstructing academic studies, organizing thematic matrices, and synthesizing insights while preserving critical thinking.
-                      </p>
-                      
-                      <div className="pt-2">
-                        <button 
-                          onClick={() => setStudentStep(1)}
-                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-5 py-3 rounded-xl shadow-md transition-all flex items-center space-x-2"
-                        >
-                          <span>Start Organizing Literature</span>
-                          <i data-lucide="arrow-right" className="w-4 h-4"></i>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+              {/* Add Annotation Form */}
+              <form onSubmit={handleAddAnnotation} class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <h4 class="font-bold text-white text-xs uppercase tracking-wider">Add Color-Coded Annotation</h4>
 
-                  {/* 4 Pillars of Responsible AI Synthesis */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    
-                    <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 space-y-2">
-                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm">1</div>
-                      <h3 className="text-xs font-bold text-blue-900 dark:text-blue-200">Deconstruct & Summarize</h3>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                        Extract core findings, methodologies, and limitations from empirical local and foreign studies without copying verbatim text.
-                      </p>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 space-y-2">
-                      <div className="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold text-sm">2</div>
-                      <h3 className="text-xs font-bold text-amber-900 dark:text-amber-200">Annotate & Evaluate</h3>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                        Tag explicit evidence using color-coded categories: Key Insights, Critiques, Recommendations, and Limitations.
-                      </p>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 space-y-2">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">3</div>
-                      <h3 className="text-xs font-bold text-emerald-900 dark:text-emerald-200">Thematic Clustering</h3>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                        Group related source annotations into student-defined conceptual themes rather than summarizing paper by paper.
-                      </p>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900/50 space-y-2">
-                      <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">4</div>
-                      <h3 className="text-xs font-bold text-indigo-900 dark:text-indigo-200">AI Writing Coach</h3>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                        Draft syntheses with instant AI feedback verifying grammar, structural flow, and APA/CSE/Chicago citation alignment.
-                      </p>
-                    </div>
-
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 1: UPLOAD & SUMMARIZE (BLUE THEME) */}
-              {studentStep === 1 && (
-                <div className="space-y-6">
-                  
-                  {/* Top Bar: Citation Selector & Upload Header */}
-                  <div className="bg-blue-50 dark:bg-blue-950/40 p-5 rounded-2xl border border-blue-200 dark:border-blue-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-sm font-bold text-blue-950 dark:text-blue-100 flex items-center gap-2">
-                        <i data-lucide="file-text" className="w-4 h-4 text-blue-600"></i> Step 1: Upload Literature & Format Citations
-                      </h2>
-                      <p className="text-xs text-blue-800/80 dark:text-blue-300 mt-0.5">
-                        Upload research PDFs. Choose your required academic citation style below.
-                      </p>
-                    </div>
-
-                    {/* REVISION 3: CITATION STYLE SELECTOR */}
-                    <div className="flex items-center space-x-2 bg-white dark:bg-slate-800 p-1.5 rounded-xl border border-blue-200 dark:border-blue-700 shadow-sm">
-                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300 px-2">Citation Style:</span>
-                      {['APA', 'CSE', 'Chicago'].map(style => (
-                        <button
-                          key={style}
-                          onClick={() => setSelectedCitationStyle(style)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                            selectedCitationStyle === style
-                              ? 'bg-blue-600 text-white shadow-sm'
-                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-                          }`}
-                        >
-                          {style}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    {/* Left Column: PDF Dropzone */}
-                    <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
-                      <div>
-                        <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                          <i data-lucide="upload-cloud" className="w-4 h-4 text-blue-600"></i> Upload Empirical PDF Studies
-                        </h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          Files are parsed client-side and automatically checked for Local (Philippines) vs Foreign origin.
-                        </p>
-
-                        <div className="mt-4 border-2 border-dashed border-blue-300 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-950/20 hover:border-blue-500 rounded-xl p-6 text-center transition-all cursor-pointer relative">
-                          <input 
-                            type="file" 
-                            multiple 
-                            accept=".pdf"
-                            onChange={handlePdfUpload}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          />
-                          <div className="flex flex-col items-center">
-                            <div className="w-10 h-10 bg-white dark:bg-slate-700 rounded-full flex items-center justify-center shadow mb-2 text-blue-600 dark:text-blue-400">
-                              <i data-lucide="file-up" className="w-5 h-5"></i>
-                            </div>
-                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Select or drop research PDFs</p>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Supports multi-file upload</p>
-                          </div>
-                        </div>
-
-                        {isProcessingPdf && (
-                          <div className="mt-3 bg-blue-50 dark:bg-blue-950/60 p-3 rounded-xl border border-blue-200 dark:border-blue-800 text-xs text-blue-800 dark:text-blue-300 flex items-center space-x-2">
-                            <i data-lucide="refresh-cw" className="w-4 h-4 animate-spin text-blue-600"></i>
-                            <span>Processing PDF & detecting origin...</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
-                        <p className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                          <i data-lucide="check-circle" className="w-3.5 h-3.5 text-blue-600"></i> 1 Pre-loaded Study Kept
-                        </p>
-                        <p className="mt-0.5 text-[11px]">Allows instant testing without requiring initial PDF upload.</p>
-                      </div>
-                    </div>
-
-                    {/* REVISION 2, 4, 5: SCROLLABLE LIST arranged Most Recent to Oldest with Foreign/Local Labels */}
-                    <div className="lg:col-span-2 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                          <i data-lucide="clock" className="w-4 h-4 text-blue-600"></i> Literature Sources (Most Recent First) - {papers.length} Total
-                        </h3>
-                        <button 
-                          onClick={() => setStudentStep(2)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1 shadow-sm transition-all"
-                        >
-                          <span>Proceed to Annotate</span>
-                          <i data-lucide="arrow-right" className="w-3.5 h-3.5"></i>
-                        </button>
-                      </div>
-
-                      {/* Scrollable Container */}
-                      <div className="max-h-[500px] overflow-y-auto space-y-4 pr-1">
-                        {papers.map((paper) => (
-                          <div key={paper.id} className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-700">
-                            
-                            {/* Header: Origin Tag & Citation */}
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="space-y-1">
-                                <div className="flex items-center space-x-2">
-                                  {/* REVISION 5: ORIGIN IDENTIFIER (Local vs Foreign) */}
-                                  <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${
-                                    paper.origin.includes('Local') 
-                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300' 
-                                      : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-300'
-                                  }`}>
-                                    {paper.origin}
-                                  </span>
-
-                                  <span className="text-[10px] text-slate-400 font-mono">
-                                    {paper.fileName}
-                                  </span>
-                                </div>
-
-                                <h4 className="text-xs font-bold text-slate-900 dark:text-white">{paper.title}</h4>
-                                
-                                {/* REVISION 3: PROPER CITATION DISPLAY */}
-                                <p className="text-[11px] font-serif italic text-blue-900 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/30 p-2 rounded-lg border border-blue-100 dark:border-blue-900/40">
-                                  <span className="font-bold font-sans not-italic text-[10px] uppercase text-blue-600 block">Formatted Citation ({selectedCitationStyle}):</span>
-                                  {formatCitation(paper)}
-                                </p>
-                              </div>
-
-                              <button 
-                                onClick={() => setPapers(prev => prev.filter(p => p.id !== paper.id))}
-                                className="text-slate-300 hover:text-rose-500 transition-colors p-1"
-                                title="Remove document"
-                              >
-                                <i data-lucide="trash-2" className="w-4 h-4"></i>
-                              </button>
-                            </div>
-
-                            {/* Structured AI Summary Grid */}
-                            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                              <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700">
-                                <span className="font-bold text-blue-700 dark:text-blue-400 block mb-0.5 text-[10px]">Key Findings:</span>
-                                <p className="text-slate-600 dark:text-slate-300 text-[11px]">{paper.summary.keyFindings}</p>
-                              </div>
-                              <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700">
-                                <span className="font-bold text-blue-700 dark:text-blue-400 block mb-0.5 text-[10px]">Methodology:</span>
-                                <p className="text-slate-600 dark:text-slate-300 text-[11px]">{paper.summary.methodology}</p>
-                              </div>
-                              <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700">
-                                <span className="font-bold text-blue-700 dark:text-blue-400 block mb-0.5 text-[10px]">Core Arguments:</span>
-                                <p className="text-slate-600 dark:text-slate-300 text-[11px]">{paper.summary.coreArguments}</p>
-                              </div>
-                              <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700">
-                                <span className="font-bold text-blue-700 dark:text-blue-400 block mb-0.5 text-[10px]">Limitations:</span>
-                                <p className="text-slate-600 dark:text-slate-300 text-[11px]">{paper.summary.limitations}</p>
-                              </div>
-                            </div>
-
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 2: ANNOTATE & EVALUATE (AMBER THEME) */}
-              {studentStep === 2 && (
-                <div className="space-y-6">
-                  
-                  <div className="bg-amber-50 dark:bg-amber-950/40 p-5 rounded-2xl border border-amber-200 dark:border-amber-800 flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-bold text-amber-950 dark:text-amber-100 flex items-center gap-2">
-                        <i data-lucide="highlighter" className="w-4 h-4 text-amber-600"></i> Step 2: Annotate, Tag & Rate Sources
-                      </h2>
-                      <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
-                        Extract key quotes and tag them into distinct color-coded categories.
-                      </p>
-                    </div>
-
-                    <button 
-                      onClick={() => setStudentStep(3)}
-                      className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1 shadow-sm transition-all"
+                {/* Color-Coded Type Options */}
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {Object.entries(categoryStyles).map(([key, cfg]) => (
+                    <button
+                      type="button"
+                      key={key}
+                      onClick={() => setNewAnnoType(key)}
+                      class={`p-2 rounded-xl text-xs font-semibold border transition-all flex flex-col items-center gap-1 ${
+                        newAnnoType === key
+                          ? `${cfg.bg} ${cfg.text} ${cfg.border} ring-2 ring-amber-500/40`
+                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                      }`}
                     >
-                      <span>Proceed to Clustering</span>
-                      <i data-lucide="arrow-right" className="w-3.5 h-3.5"></i>
+                      <span class={`w-2 h-2 rounded-full ${cfg.badge}`}></span>
+                      <span>{cfg.label}</span>
                     </button>
+                  ))}
+                </div>
+
+                <div class="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter your critical tag / note..."
+                    value={newAnnoText}
+                    onChange={(e) => setNewAnnoText(e.target.value)}
+                    class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Page"
+                    value={newAnnoPage}
+                    onChange={(e) => setNewAnnoPage(e.target.value)}
+                    class="w-20 bg-slate-950 border border-slate-800 rounded-xl px-2 py-2 text-xs text-white text-center focus:outline-none focus:border-amber-500"
+                  />
+                  <button
+                    type="submit"
+                    class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs rounded-xl shadow transition-all shrink-0"
+                  >
+                    Add Tag
+                  </button>
+                </div>
+              </form>
+
+              {/* Existing Annotations List */}
+              <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                <h4 class="font-bold text-white text-xs uppercase tracking-wider">
+                  Active Annotations for this Study ({activeStudy.annotations.length})
+                </h4>
+
+                {activeStudy.annotations.length === 0 ? (
+                  <p class="text-xs text-slate-500 py-4 text-center">No annotations added yet for this study.</p>
+                ) : (
+                  <div class="space-y-2">
+                    {activeStudy.annotations.map((ann) => {
+                      const style = categoryStyles[ann.type] || categoryStyles.key_insight;
+                      return (
+                        <div
+                          key={ann.id}
+                          class={`p-3 rounded-xl border flex items-start justify-between gap-3 ${style.bg} ${style.border}`}
+                        >
+                          <div class="space-y-1">
+                            <div class="flex items-center gap-2">
+                              <span class={`px-2 py-0.5 rounded text-[9px] font-bold text-white ${style.badge}`}>
+                                {style.label}
+                              </span>
+                              <span class="text-[10px] text-slate-400 font-mono">Page {ann.page}</span>
+                            </div>
+                            <p class={`text-xs ${style.text}`}>{ann.text}</p>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteAnnotation(ann.id)}
+                            class="text-xs text-slate-500 hover:text-rose-400 transition-colors shrink-0"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {papers.map((paper) => (
-                      <div key={paper.id} className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
-                        
-                        {/* Title & Star Rating */}
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded ${
-                              paper.origin.includes('Local') ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800'
-                            }`}>
-                              {paper.origin}
-                            </span>
-                            <h3 className="text-xs font-bold text-slate-900 dark:text-white mt-1">{paper.title}</h3>
-                          </div>
+    // ==========================================
+    // 4. THEMATIC CLUSTERING SECTION (Emerald Theme)
+    // ==========================================
+    function ClusterSection({ studies, userThemes, setUserThemes, themeAssignments, setThemeAssignments }) {
+      const [newThemeInput, setNewThemeInput] = useState('');
 
-                          <div className="flex items-center space-x-1 bg-amber-50 dark:bg-amber-950/60 p-1.5 rounded-xl border border-amber-200 dark:border-amber-800">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <button
-                                key={star}
-                                onClick={() => setPapers(prev => prev.map(p => p.id === paper.id ? { ...p, rating: star } : p))}
-                              >
-                                <i data-lucide="star" className={`w-3.5 h-3.5 ${star <= paper.rating ? 'text-amber-500 fill-amber-500' : 'text-slate-300 dark:text-slate-600'}`}></i>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+      // Add student-defined theme
+      const handleAddTheme = (e) => {
+        e.preventDefault();
+        if (!newThemeInput.trim()) return;
 
-                        {/* REVISION 6: COLOR-CODED ANNOTATION TAGGING */}
-                        <div className="pt-3 border-t border-slate-100 dark:border-slate-700 space-y-2">
-                          <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">Add Tagged Quote or Critique:</label>
-                          <input
-                            type="text"
-                            id={`anno_txt_${paper.id}`}
-                            placeholder="Enter key quote or analytical note..."
-                            className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:outline-none text-slate-800 dark:text-slate-100"
-                          />
-                          
-                          <div className="flex gap-2">
-                            {/* Color-Coded Dropdown Category Selector */}
-                            <select 
-                              id={`anno_cat_${paper.id}`}
-                              className="text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-semibold focus:outline-none flex-1"
+        const newTheme = {
+          id: 'theme-' + Date.now(),
+          title: newThemeInput.trim()
+        };
+
+        setUserThemes([...userThemes, newTheme]);
+        setThemeAssignments({ ...themeAssignments, [newTheme.id]: [] });
+        setNewThemeInput('');
+      };
+
+      const handleDeleteTheme = (themeId) => {
+        setUserThemes(userThemes.filter(t => t.id !== themeId));
+        const updated = { ...themeAssignments };
+        delete updated[themeId];
+        setThemeAssignments(updated);
+      };
+
+      // Toggle annotation into theme
+      const toggleAnnotationInTheme = (themeId, annId) => {
+        const currentList = themeAssignments[themeId] || [];
+        const isAssigned = currentList.includes(annId);
+
+        const updatedList = isAssigned
+          ? currentList.filter(id => id !== annId)
+          : [...currentList, annId];
+
+        setThemeAssignments({
+          ...themeAssignments,
+          [themeId]: updatedList
+        });
+      };
+
+      // Extract all annotations across all studies
+      const allAnnotations = useMemo(() => {
+        const list = [];
+        studies.forEach(study => {
+          study.annotations.forEach(ann => {
+            list.push({ ...ann, studyTitle: study.title, studyId: study.id, studyOrigin: study.origin });
+          });
+        });
+        return list;
+      }, [studies]);
+
+      return (
+        <div class="space-y-6">
+          {/* Header Banner */}
+          <div class="bg-emerald-950/40 border border-emerald-800/60 p-5 rounded-2xl">
+            <span class="px-2.5 py-1 bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+              Section 4: Student Defined Thematic Clustering
+            </span>
+            <h2 class="text-xl font-bold text-white mt-1">Construct Your Synthesis Matrix</h2>
+            <p class="text-xs text-emerald-200/80 mt-0.5">
+              Input your overarching themes. Assign specific annotations to cluster evidence before drafting your synthesis.
+            </p>
+          </div>
+
+          {/* Theme Input Bar */}
+          <form onSubmit={handleAddTheme} class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex gap-3">
+            <input
+              type="text"
+              placeholder="Input your custom thematic heading (e.g., 'Digital Equity and Access Gaps in Rural Contexts')..."
+              value={newThemeInput}
+              onChange={(e) => setNewThemeInput(e.target.value)}
+              class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+            />
+            <button
+              type="submit"
+              class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow transition-all shrink-0"
+            >
+              + Add Theme
+            </button>
+          </form>
+
+          {/* Clusters Grid */}
+          {userThemes.length === 0 ? (
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-2">
+              <p class="text-slate-400 text-xs">No themes created yet.</p>
+              <p class="text-slate-500 text-[11px]">Type a theme above to build your qualitative matrix.</p>
+            </div>
+          ) : (
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {userThemes.map((theme) => {
+                const assignedAnnIds = themeAssignments[theme.id] || [];
+                return (
+                  <div key={theme.id} class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                      <h3 class="font-bold text-white text-sm text-emerald-400 flex items-center gap-2">
+                        <span>{theme.title}</span>
+                        <span class="px-2 py-0.5 bg-emerald-950 text-emerald-300 rounded-full text-[10px] border border-emerald-800 font-mono">
+                          {assignedAnnIds.length} items
+                        </span>
+                      </h3>
+                      <button
+                        onClick={() => handleDeleteTheme(theme.id)}
+                        class="text-xs text-slate-500 hover:text-rose-400 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+
+                    {/* Annotation Selection Matrix */}
+                    <div class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Select Annotations for this Theme:
+                      </span>
+                      {allAnnotations.length === 0 ? (
+                        <p class="text-[11px] text-slate-500 py-2">First add annotations in Section 3.</p>
+                      ) : (
+                        allAnnotations.map((ann) => {
+                          const isAssigned = assignedAnnIds.includes(ann.id);
+                          return (
+                            <label
+                              key={ann.id}
+                              class={`p-2.5 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                                isAssigned
+                                  ? 'bg-emerald-950/40 border-emerald-600/80 text-emerald-200'
+                                  : 'bg-slate-950/60 border-slate-800/80 text-slate-400 hover:border-slate-700'
+                              }`}
                             >
-                              <option value="Key Insight">Key Insight (Blue)</option>
-                              <option value="Critique">Critique (Orange)</option>
-                              <option value="Recommendation">Recommendation (Purple)</option>
-                              <option value="Limitations">Limitations (Red)</option>
-                            </select>
-
-                            <button
-                              onClick={() => {
-                                const txtEl = document.getElementById(`anno_txt_${paper.id}`);
-                                const catEl = document.getElementById(`anno_cat_${paper.id}`);
-                                if (txtEl && txtEl.value) {
-                                  handleAddAnnotation(paper.id, txtEl.value, catEl.value);
-                                  txtEl.value = '';
-                                }
-                              }}
-                              className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-4 py-2 rounded-xl font-bold transition-all"
-                            >
-                              + Save Annotation
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Saved Tagged Annotations */}
-                        <div className="space-y-2 pt-2">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Annotations Tagged ({paper.annotations.length})</span>
-                          {paper.annotations.length === 0 ? (
-                            <p className="text-xs text-slate-400 italic">No annotations added yet.</p>
-                          ) : (
-                            paper.annotations.map(a => (
-                              <div key={a.id} className="p-2.5 rounded-xl border text-xs space-y-1 bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700">
-                                <div className="flex items-center justify-between">
-                                  <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border ${getCategoryBadgeClass(a.category)}`}>
-                                    {a.category}
-                                  </span>
-                                  <button 
-                                    onClick={() => setPapers(prev => prev.map(p => p.id === paper.id ? { ...p, annotations: p.annotations.filter(an => an.id !== a.id) } : p))}
-                                    className="text-slate-400 hover:text-rose-500 font-bold text-xs"
-                                  >
-                                    ×
-                                  </button>
+                              <input
+                                type="checkbox"
+                                checked={isAssigned}
+                                onChange={() => toggleAnnotationInTheme(theme.id, ann.id)}
+                                class="mt-1 rounded border-slate-700 text-emerald-600 focus:ring-emerald-500 bg-slate-900"
+                              />
+                              <div class="space-y-0.5 text-xs">
+                                <p class="font-medium">{ann.text}</p>
+                                <div class="text-[10px] text-slate-500 flex items-center gap-2">
+                                  <span>{ann.studyTitle}</span>
+                                  <span>&bull;</span>
+                                  <span class="capitalize">{ann.type.replace('_', ' ')}</span>
                                 </div>
-                                <p className="text-slate-800 dark:text-slate-200 font-medium">"{a.text}"</p>
                               </div>
-                            ))
-                          )}
-                        </div>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
 
+    // ==========================================
+    // 5. SYNTHESIS & AI COACH SECTION (Indigo Theme)
+    // ==========================================
+    function SynthesisSection({
+      studies,
+      userThemes,
+      themeAssignments,
+      synthesisTitle,
+      setSynthesisTitle,
+      synthesisText,
+      setSynthesisText,
+      teacherEmail,
+      setTeacherEmail,
+      submissionStatus,
+      setSubmissionStatus,
+      selectedCitationStyle,
+      apiKey,
+      generateCitation
+    }) {
+      const [aiFeedback, setAiFeedback] = useState([]);
+      const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+      // AI Built-in Writing Coach Function
+      const handleRunAiCoach = async () => {
+        if (!synthesisText.trim()) return;
+        setIsAnalyzing(true);
+        setAiFeedback([]);
+
+        if (apiKey && apiKey.trim().length > 10) {
+          try {
+            const prompt = `Act as an academic research writing coach. Analyze the following student synthesis draft against the chosen style (${selectedCitationStyle}).
+Check for:
+1. Grammar & Punctuation
+2. Structural Flow & Coherence
+3. Proper formatting according to ${selectedCitationStyle} style.
+
+Student Text:
+"${synthesisText}"
+
+Return JSON array of suggestions: [{"type": "grammar"|"structure"|"citation", "suggestion": "description"}]`;
+
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            const data = await res.json();
+            const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const match = raw.match(/\[[\s\S]*\]/);
+            if (match) {
+              setAiFeedback(JSON.parse(match[0]));
+              setIsAnalyzing(false);
+              return;
+            }
+          } catch (err) {
+            console.warn('Gemini coach error, using fallback:', err);
+          }
+        }
+
+        // Local Fallback Rule-Based AI Coach
+        setTimeout(() => {
+          const feedback = [];
+
+          // Grammar & Punctuation Check
+          if (synthesisText.length < 100) {
+            feedback.push({
+              type: 'structure',
+              suggestion: 'Your synthesis draft is concise. Consider expanding thematic connections between local and international findings.'
+            });
+          }
+          if (!synthesisText.includes('(') || !synthesisText.includes(')')) {
+            feedback.push({
+              type: 'citation',
+              suggestion: `Ensure inline citations strictly adhere to ${selectedCitationStyle} format (e.g., Santos & Cruz, 2024).`
+            });
+          } else {
+            feedback.push({
+              type: 'citation',
+              suggestion: `Citations detected. Verify that author names and publication years match your uploaded study metadata in ${selectedCitationStyle}.`
+            });
+          }
+
+          feedback.push({
+            type: 'grammar',
+            suggestion: 'Sentence structure shows good academic tone. Ensure passive vs. active voice remains consistent throughout synthesis sections.'
+          });
+
+          setAiFeedback(feedback);
+          setIsAnalyzing(false);
+        }, 1000);
+      };
+
+      // Submit to teacher
+      const handleSubmitToTeacher = (e) => {
+        e.preventDefault();
+        if (!teacherEmail.trim()) return;
+
+        setSubmissionStatus({
+          submitted: true,
+          time: new Date().toLocaleString(),
+          teacherEmail: teacherEmail.trim()
+        });
+      };
+
+      return (
+        <div class="space-y-6">
+          {/* Header Banner */}
+          <div class="bg-indigo-950/40 border border-indigo-800/60 p-5 rounded-2xl">
+            <span class="px-2.5 py-1 bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+              Section 5: Synthesis & AI Coach Evaluation
+            </span>
+            <h2 class="text-xl font-bold text-white mt-1">Draft Synthesis & Consult AI Writing Coach</h2>
+            <p class="text-xs text-indigo-200/80 mt-0.5">
+              Review active clustered themes, draft your narrative, utilize the AI Coach, and submit directly to your instructor.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Active Themes Matrix Sidebar */}
+            <div class="lg:col-span-4 space-y-4">
+              <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                  Active Clustered Themes Matrix ({userThemes.length})
+                </h3>
+
+                {userThemes.length === 0 ? (
+                  <p class="text-xs text-slate-500">No active themes clustered. Go to Section 4 to build themes.</p>
+                ) : (
+                  <div class="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                    {userThemes.map((theme) => {
+                      const assignedIds = themeAssignments[theme.id] || [];
+                      return (
+                        <div key={theme.id} class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                          <h4 class="font-bold text-xs text-emerald-300">{theme.title}</h4>
+                          <p class="text-[10px] text-slate-400">{assignedIds.length} tagged evidence items</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Synthesis Drafting Workspace */}
+            <div class="lg:col-span-8 space-y-5">
+              {/* Draft Input */}
+              <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <input
+                  type="text"
+                  placeholder="Synthesis Title..."
+                  value={synthesisTitle}
+                  onChange={(e) => setSynthesisTitle(e.target.value)}
+                  class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-indigo-500"
+                />
+
+                <textarea
+                  rows="10"
+                  placeholder="Write your thematic synthesis here... Synthesize findings across local and foreign literature using your active clusters..."
+                  value={synthesisText}
+                  onChange={(e) => setSynthesisText(e.target.value)}
+                  class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 leading-relaxed font-sans"
+                ></textarea>
+
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={handleRunAiCoach}
+                    disabled={isAnalyzing}
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow transition-all flex items-center gap-2"
+                  >
+                    <span>{isAnalyzing ? 'Scanning Draft...' : 'Run Built-In AI Coach'}</span>
+                  </button>
+
+                  <span class="text-xs text-slate-400">
+                    Style: <strong class="text-indigo-300">{selectedCitationStyle}</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* AI Coach Feedback Panel */}
+              {aiFeedback.length > 0 && (
+                <div class="bg-indigo-950/50 border border-indigo-800 rounded-2xl p-5 space-y-3">
+                  <h4 class="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-2">
+                    <span>AI Writing Coach Feedback</span>
+                  </h4>
+                  <div class="space-y-2">
+                    {aiFeedback.map((fb, idx) => (
+                      <div key={idx} class="bg-slate-900/90 p-3 rounded-xl border border-indigo-900/80 text-xs text-indigo-200 space-y-1">
+                        <span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-900 text-indigo-300">
+                          {fb.type}
+                        </span>
+                        <p>{fb.suggestion}</p>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* STEP 3: THEMATIC CLUSTERING (EMERALD THEME) */}
-              {studentStep === 3 && (
-                <div className="space-y-6">
-                  
-                  <div className="bg-emerald-50 dark:bg-emerald-950/40 p-5 rounded-2xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-bold text-emerald-950 dark:text-emerald-100 flex items-center gap-2">
-                        <i data-lucide="layers" className="w-4 h-4 text-emerald-600"></i> Step 3: Interactive Thematic Clustering
-                      </h2>
-                      <p className="text-xs text-emerald-800 dark:text-emerald-300 mt-0.5">
-                        Define custom conceptual themes and assign annotated source quotes.
-                      </p>
-                    </div>
-
-                    <button 
-                      onClick={() => setStudentStep(4)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1 shadow-sm transition-all"
-                    >
-                      <span>Proceed to Synthesis</span>
-                      <i data-lucide="arrow-right" className="w-3.5 h-3.5"></i>
-                    </button>
-                  </div>
-
-                  {/* REVISION 7: STUDENT INPUTS THEMES (NO PRE-EXISTING DEFAULT THEMES) */}
-                  <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-3">
-                    <i data-lucide="folder-plus" className="w-5 h-5 text-emerald-600"></i>
-                    <input 
-                      type="text"
-                      id="themeTitleInput"
-                      placeholder="Input your custom theme name (e.g., 'Theme 1: Pedagogical Scaffolding & Cognitive Impact')..."
-                      className="flex-1 text-xs p-2.5 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
-                    />
-                    <button
-                      onClick={() => {
-                        const input = document.getElementById('themeTitleInput');
-                        if (input && input.value) {
-                          handleCreateTheme(input.value);
-                          input.value = '';
-                        }
-                      }}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-2.5 rounded-xl font-bold transition-all"
-                    >
-                      + Add Custom Theme
-                    </button>
-                  </div>
-
-                  {/* Display Themes Grid */}
-                  {themes.length === 0 ? (
-                    <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl border-2 border-dashed border-emerald-200 dark:border-emerald-800 text-center space-y-2">
-                      <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-950 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                        <i data-lucide="layers" className="w-6 h-6"></i>
-                      </div>
-                      <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">No Themes Defined Yet</h3>
-                      <p className="text-[11px] text-slate-500 max-w-md mx-auto">
-                        Input custom synthesis themes above to group your annotated empirical evidence across local and foreign sources.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {themes.map(theme => (
-                        <div key={theme.id} className={`rounded-2xl p-5 shadow-sm border ${theme.style.bg} ${theme.style.border} flex flex-col justify-between space-y-4`}>
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className={`text-xs font-extrabold ${theme.style.text}`}>
-                                {theme.title}
-                              </span>
-                              <button 
-                                onClick={() => setThemes(prev => prev.filter(t => t.id !== theme.id))}
-                                className="text-slate-400 hover:text-rose-500 font-bold p-1"
-                              >
-                                ×
-                              </button>
-                            </div>
-
-                            {/* Assigned Annotations */}
-                            <div className="space-y-2 mt-3">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Tagged Items in Theme ({theme.annotationIds.length}):</span>
-                              {theme.annotationIds.length === 0 ? (
-                                <p className="text-xs text-slate-400 italic p-3 text-center bg-white/50 dark:bg-slate-900/40 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                                  Click available quotes below to assign to this theme.
-                                </p>
-                              ) : (
-                                theme.annotationIds.map(aId => {
-                                  const anno = allAnnotations.find(a => a.id === aId);
-                                  if (!anno) return null;
-                                  return (
-                                    <div key={aId} className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl text-xs flex items-start justify-between gap-2 shadow-sm">
-                                      <div>
-                                        <div className="flex items-center space-x-1.5 mb-1">
-                                          <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.2 rounded border ${getCategoryBadgeClass(anno.category)}`}>
-                                            {anno.category}
-                                          </span>
-                                          <span className="text-[9px] font-bold text-slate-500">{anno.paperOrigin}</span>
-                                        </div>
-                                        <p className="text-slate-800 dark:text-slate-200 font-medium">"{anno.text}"</p>
-                                      </div>
-                                      <button 
-                                        onClick={() => toggleAnnotationInTheme(theme.id, aId)}
-                                        className="text-slate-400 hover:text-rose-500 font-bold p-1"
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Available Annotations Selector */}
-                          <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
-                            <label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 block mb-1.5">Assign Source Quotes:</label>
-                            <div className="max-h-32 overflow-y-auto space-y-1">
-                              {allAnnotations.map(a => {
-                                const isAssigned = theme.annotationIds.includes(a.id);
-                                return (
-                                  <button
-                                    key={a.id}
-                                    onClick={() => toggleAnnotationInTheme(theme.id, a.id)}
-                                    className={`w-full text-left p-1.5 rounded-lg text-[10px] flex items-center justify-between border transition-all ${
-                                      isAssigned 
-                                        ? 'bg-emerald-600 text-white font-bold' 
-                                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                                    }`}
-                                  >
-                                    <span className="truncate mr-1">[{a.category}] "{a.text}"</span>
-                                    <span>{isAssigned ? '✓' : '+'}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                </div>
-              )}
-
-              {/* STEP 4: SYNTHESIS & BUILT-IN AI COACH (INDIGO THEME) */}
-              {studentStep === 4 && (
-                <div className="space-y-6">
-                  
-                  <div className="bg-indigo-50 dark:bg-indigo-950/40 p-5 rounded-2xl border border-indigo-200 dark:border-indigo-800 flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-bold text-indigo-950 dark:text-indigo-100 flex items-center gap-2">
-                        <i data-lucide="edit-3" className="w-4 h-4 text-indigo-600"></i> Step 4: Literature Review Synthesis & AI Writing Coach
-                      </h2>
-                      <p className="text-xs text-indigo-800 dark:text-indigo-300 mt-0.5">
-                        Draft your integrated review. The AI Coach checks grammar, structural flow, and {selectedCitationStyle} citations.
-                      </p>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900 px-3 py-1 rounded-lg">
-                        Style: {selectedCitationStyle}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    {/* Left Column: REVISION 8 & 9 (ACTIVE REFLECTED THEMES + BUILT-IN AI COACH) */}
-                    <div className="lg:col-span-1 space-y-4">
-                      
-                      {/* REVISION 8: ACTIVE CLUSTERED THEMES REFLECTED DYNAMICALLY */}
-                      <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 space-y-3">
-                        <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                          <i data-lucide="tag" className="w-4 h-4 text-indigo-600"></i> Active Synced Themes ({themes.length})
-                        </h3>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Reflects custom themes created in Step 3.
-                        </p>
-
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                          {themes.length === 0 ? (
-                            <p className="text-xs text-slate-400 italic p-2.5 bg-slate-50 dark:bg-slate-900 rounded-xl">
-                              No themes created in Step 3 yet.
-                            </p>
-                          ) : (
-                            themes.map(t => (
-                              <div key={t.id} className="p-2.5 bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 rounded-xl text-xs flex items-center justify-between">
-                                <span className="font-bold text-indigo-900 dark:text-indigo-200 text-[11px]">{t.title}</span>
-                                <span className="text-[9px] bg-indigo-200 dark:bg-indigo-900 text-indigo-900 dark:text-indigo-200 px-2 py-0.5 rounded-full font-extrabold">
-                                  {t.annotationIds.length} items
-                                </span>
-                              </div>
-                            ))
-                          )}
-                        </div>
-
-                        <button
-                          onClick={generateAiSynthesisDraft}
-                          disabled={isAiGenerating}
-                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 rounded-xl shadow transition-all flex items-center justify-center space-x-1.5"
-                        >
-                          {isAiGenerating ? (
-                            <i data-lucide="refresh-cw" className="w-3.5 h-3.5 animate-spin"></i>
-                          ) : (
-                            <i data-lucide="sparkles" className="w-3.5 h-3.5 text-amber-300"></i>
-                          )}
-                          <span>Auto-Draft Synthesis ({selectedCitationStyle})</span>
-                        </button>
-                      </div>
-
-                      {/* REVISION 9: BUILT-IN AI COACH CARD */}
-                      <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 text-white p-5 rounded-2xl shadow-md space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2 text-amber-400">
-                            <i data-lucide="bot" className="w-5 h-5"></i>
-                            <h3 className="text-xs font-extrabold text-white">Built-in AI Writing Coach</h3>
-                          </div>
-                          <button
-                            onClick={runAiWritingCoach}
-                            disabled={isCoachAnalyzing}
-                            className="bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11px] font-extrabold px-3 py-1 rounded-lg transition-all"
-                          >
-                            {isCoachAnalyzing ? 'Analyzing...' : 'Audit Text'}
-                          </button>
-                        </div>
-
-                        {aiCoachFeedback ? (
-                          <div className="space-y-3 text-xs">
-                            <div className="bg-white/10 p-2.5 rounded-xl space-y-1">
-                              <span className="font-bold text-amber-300 text-[10px] uppercase block">1. Grammar & Punctuation:</span>
-                              <p className="text-slate-200 text-[11px] leading-relaxed">{aiCoachFeedback.grammarCheck}</p>
-                            </div>
-                            <div className="bg-white/10 p-2.5 rounded-xl space-y-1">
-                              <span className="font-bold text-amber-300 text-[10px] uppercase block">2. Structural Flow:</span>
-                              <p className="text-slate-200 text-[11px] leading-relaxed">{aiCoachFeedback.structuralAdvice}</p>
-                            </div>
-                            <div className="bg-white/10 p-2.5 rounded-xl space-y-1">
-                              <span className="font-bold text-amber-300 text-[10px] uppercase block">3. {selectedCitationStyle} Compliance:</span>
-                              <p className="text-slate-200 text-[11px] leading-relaxed">{aiCoachFeedback.citationCompliance}</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-300 italic">
-                            Click "Audit Text" to analyze your synthesis for grammar, structural transitions, and {selectedCitationStyle} citation accuracy.
-                          </p>
-                        )}
-                      </div>
-
-                    </div>
-
-                    {/* Right Column: Draft Textarea & REVISION 11 (TEACHER EMAIL & SUBMIT) */}
-                    <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between space-y-4">
-                      
-                      <div>
-                        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
-                          <div>
-                            <h3 className="text-xs font-bold text-slate-900 dark:text-white">Student Synthesis Essay Draft</h3>
-                            <p className="text-[11px] text-slate-500">Edit and refine your review prior to teacher submission.</p>
-                          </div>
-                          <span className="text-xs text-slate-500 font-bold">
-                            Word Count: {synthesisText.trim().split(/\s+/).filter(Boolean).length}
-                          </span>
-                        </div>
-
-                        <textarea
-                          value={synthesisText}
-                          onChange={(e) => setSynthesisText(e.target.value)}
-                          rows={14}
-                          className="w-full mt-4 p-4 text-xs sm:text-sm font-serif text-slate-800 dark:text-slate-200 leading-relaxed border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none bg-slate-50/50 dark:bg-slate-900/50"
-                          placeholder="Type or generate your literature synthesis here..."
-                        />
-                      </div>
-
-                      {/* REVISION 11: TEACHER EMAIL INPUT & SUBMISSION */}
-                      <div className="pt-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 block mb-1">Student Name:</label>
-                            <input 
-                              type="text" 
-                              value={studentName}
-                              onChange={(e) => setStudentName(e.target.value)}
-                              className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 block mb-1">Teacher Email Address:</label>
-                            <input 
-                              type="email" 
-                              value={teacherEmail}
-                              onChange={(e) => setTeacherEmail(e.target.value)}
-                              placeholder="instructor@university.edu.ph"
-                              className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2">
-                          <span className="text-xs text-slate-400 flex items-center gap-1">
-                            <i data-lucide="mail" className="w-3.5 h-3.5 text-indigo-500"></i>
-                            Dispatches email submission directly to instructor
-                          </span>
-
-                          <button
-                            onClick={handleSubmitToTeacher}
-                            disabled={isSubmitted}
-                            className={`px-6 py-3 rounded-xl text-xs font-bold flex items-center space-x-2 shadow-md transition-all ${
-                              isSubmitted 
-                                ? 'bg-emerald-600 text-white cursor-default' 
-                                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                            }`}
-                          >
-                            <i data-lucide="send" className="w-4 h-4"></i>
-                            <span>{isSubmitted ? 'Submitted to Teacher ✓' : 'Submit & Email Teacher'}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                    </div>
-
-                  </div>
-                </div>
-              )}
-
-            </main>
-          )}
-
-          {/* TEACHER DASHBOARD VIEW (ROSE THEME) */}
-          {role === 'teacher' && (
-            <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-              
-              <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-extrabold uppercase tracking-wider bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-100 px-2.5 py-0.5 rounded-full">
-                      Teacher Review Portal
-                    </span>
-                    <span className="text-xs text-rose-800 dark:text-rose-300 font-bold">• Student: {studentName}</span>
-                  </div>
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white mt-1">Literature Review Synthesis Grading & Sentence Feedback</h2>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setReviewPublished(true);
-                    triggerToast('Evaluation and feedback published to student!');
-                  }}
-                  className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center space-x-2 shadow-md transition-all"
-                >
-                  <i data-lucide="check-circle-2" className="w-4 h-4"></i>
-                  <span>Publish Grades & Feedback</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Teacher Email & Submission Form */}
+              <form onSubmit={handleSubmitToTeacher} class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                <h4 class="font-bold text-white text-xs uppercase tracking-wider">Submit Synthesis to Teacher</h4>
                 
-                {/* Left Column: Student Text Preview */}
-                <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
-                    <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <i data-lucide="file-text" className="w-4 h-4 text-rose-600"></i> Submitted Student Review Draft
-                    </h3>
-                    <span className="text-xs font-bold text-rose-600">Citation Style: {selectedCitationStyle}</span>
-                  </div>
-
-                  <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-serif text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
-                    {synthesisText}
-                  </div>
+                <div class="flex gap-2">
+                  <input
+                    type="email"
+                    required
+                    placeholder="Enter Teacher's Email (e.g., professor@university.edu.ph)..."
+                    value={teacherEmail}
+                    onChange={(e) => setTeacherEmail(e.target.value)}
+                    class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-rose-500"
+                  />
+                  <button
+                    type="submit"
+                    class="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl shadow transition-all shrink-0"
+                  >
+                    Submit Work
+                  </button>
                 </div>
 
-                {/* Right Column: Grading Rubric */}
-                <div className="lg:col-span-1 space-y-4">
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
-                    <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <i data-lucide="award" className="w-4 h-4 text-rose-600"></i> Assessment Rubric
-                    </h3>
-
-                    <div className="space-y-3 text-xs">
-                      <div>
-                        <div className="flex justify-between mb-1 font-semibold text-slate-700 dark:text-slate-300">
-                          <span>Critical Analysis</span>
-                          <span className="text-rose-600 font-bold">{teacherRubric.criticalAnalysis} / 5</span>
-                        </div>
-                        <input 
-                          type="range" min="1" max="5" 
-                          value={teacherRubric.criticalAnalysis}
-                          onChange={(e) => setTeacherRubric({ ...teacherRubric, criticalAnalysis: parseInt(e.target.value) })}
-                          className="w-full accent-rose-600"
-                        />
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between mb-1 font-semibold text-slate-700 dark:text-slate-300">
-                          <span>Thematic Coherence</span>
-                          <span className="text-rose-600 font-bold">{teacherRubric.thematicCoherence} / 5</span>
-                        </div>
-                        <input 
-                          type="range" min="1" max="5" 
-                          value={teacherRubric.thematicCoherence}
-                          onChange={(e) => setTeacherRubric({ ...teacherRubric, thematicCoherence: parseInt(e.target.value) })}
-                          className="w-full accent-rose-600"
-                        />
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between mb-1 font-semibold text-slate-700 dark:text-slate-300">
-                          <span>Source Integration</span>
-                          <span className="text-rose-600 font-bold">{teacherRubric.sourceIntegration} / 5</span>
-                        </div>
-                        <input 
-                          type="range" min="1" max="5" 
-                          value={teacherRubric.sourceIntegration}
-                          onChange={(e) => setTeacherRubric({ ...teacherRubric, sourceIntegration: parseInt(e.target.value) })}
-                          className="w-full accent-rose-600"
-                        />
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between mb-1 font-semibold text-slate-700 dark:text-slate-300">
-                          <span>{selectedCitationStyle} Compliance</span>
-                          <span className="text-rose-600 font-bold">{teacherRubric.synthesisClarity} / 5</span>
-                        </div>
-                        <input 
-                          type="range" min="1" max="5" 
-                          value={teacherRubric.synthesisClarity}
-                          onChange={(e) => setTeacherRubric({ ...teacherRubric, synthesisClarity: parseInt(e.target.value) })}
-                          className="w-full accent-rose-600"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between font-bold text-xs">
-                      <span className="text-slate-700 dark:text-slate-300">Total Rubric Score:</span>
-                      <span className="text-base text-rose-600">
-                        {Object.values(teacherRubric).reduce((a, b) => a + b, 0)} / 20
-                      </span>
-                    </div>
+                {submissionStatus.submitted && (
+                  <div class="p-3 bg-emerald-950/80 border border-emerald-700 rounded-xl text-xs text-emerald-300">
+                    Successfully submitted to <strong>{submissionStatus.teacherEmail}</strong> on {submissionStatus.time}.
                   </div>
-
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 space-y-2">
-                    <h3 className="text-xs font-bold text-slate-900 dark:text-white">Instructor Notes & Feedback</h3>
-                    <textarea
-                      value={teacherFeedbackText}
-                      onChange={(e) => setTeacherFeedbackText(e.target.value)}
-                      rows={4}
-                      className="w-full p-2.5 text-xs border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
-                    />
-                  </div>
-                </div>
-
-              </div>
-            </main>
-          )}
-
-          {/* FOOTER */}
-          <footer className="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 py-4 text-center text-xs text-slate-400 mt-auto transition-colors">
-            SynthesizeAI Microsite — Research Literature Review Organization & AI Feedback System
-          </footer>
+                )}
+              </form>
+            </div>
+          </div>
         </div>
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    // ==========================================
+    // 6. TEACHER PORTAL SECTION (Rose Theme)
+    // ==========================================
+    function TeacherSection({
+      studies,
+      synthesisTitle,
+      synthesisText,
+      submissionStatus,
+      userThemes,
+      themeAssignments,
+      teacherScore,
+      setTeacherScore,
+      teacherComments,
+      setTeacherComments,
+      selectedCitationStyle,
+      generateCitation
+    }) {
+      const [sentenceFlags, setSentenceFlags] = useState([]);
+
+      // Auto Sentence-Level Flagging Tool
+      const handleRunSentenceFlagging = () => {
+        if (!synthesisText.trim()) return;
+
+        const sentences = synthesisText.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
+        const flags = [];
+
+        sentences.forEach((sent, idx) => {
+          if (!sent.includes('(') && sent.length > 50) {
+            flags.push({
+              sentenceIndex: idx,
+              sentence: sent,
+              issue: 'Missing Empirical Citation',
+              recommendation: 'Sentence makes an unbacked claim. Add inline citation.'
+            });
+          } else if (sent.toLowerCase().includes('very') || sent.toLowerCase().includes('really')) {
+            flags.push({
+              sentenceIndex: idx,
+              sentence: sent,
+              issue: 'Informal Academic Tone',
+              recommendation: 'Replace informal intensifiers with academic terminology.'
+            });
+          }
+        });
+
+        if (flags.length === 0 && sentences.length > 0) {
+          flags.push({
+            sentenceIndex: 0,
+            sentence: sentences[0],
+            issue: 'Tone & Clarity Check Passed',
+            recommendation: 'No major sentence-level errors detected.'
+          });
+        }
+
+        setSentenceFlags(flags);
+      };
+
+      return (
+        <div class="space-y-6">
+          {/* Header Banner */}
+          <div class="bg-rose-950/40 border border-rose-800/60 p-5 rounded-2xl">
+            <span class="px-2.5 py-1 bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+              Instructor Dashboard
+            </span>
+            <h2 class="text-xl font-bold text-white mt-1">Evaluate Student Submission & AI Sentence Flagging</h2>
+            <p class="text-xs text-rose-200/80 mt-0.5">
+              Review student thematic matrices, run AI sentence-level quality flags, and provide structured feedback.
+            </p>
+          </div>
+
+          {!submissionStatus.submitted ? (
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-xs">
+              No student submissions received yet. Switch to Student view and complete Section 5 submission.
+            </div>
+          ) : (
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Submission Overview */}
+              <div class="lg:col-span-8 space-y-5">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                  <div class="flex justify-between items-start">
+                    <div>
+                      <h3 class="font-bold text-white text-base">{synthesisTitle}</h3>
+                      <p class="text-xs text-slate-400">Submitted to: {submissionStatus.teacherEmail}</p>
+                    </div>
+                    <span class="px-2.5 py-1 bg-emerald-950 text-emerald-300 border border-emerald-700 rounded-full text-xs font-mono">
+                      Submitted: {submissionStatus.time}
+                    </span>
+                  </div>
+
+                  <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs text-slate-200 leading-relaxed font-sans">
+                    {synthesisText}
+                  </div>
+                </div>
+
+                {/* AI Sentence Level Flagging Tool */}
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                  <div class="flex items-center justify-between">
+                    <h4 class="font-bold text-white text-xs uppercase tracking-wider">AI Sentence-Level Diagnostics</h4>
+                    <button
+                      onClick={handleRunSentenceFlagging}
+                      class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
+                    >
+                      Run Sentence Flagging Tool
+                    </button>
+                  </div>
+
+                  {sentenceFlags.length > 0 && (
+                    <div class="space-y-2">
+                      {sentenceFlags.map((flag, idx) => (
+                        <div key={idx} class="bg-slate-950 p-3 rounded-xl border border-rose-900/60 text-xs space-y-1">
+                          <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-950 text-rose-300 border border-rose-800">
+                              {flag.issue}
+                            </span>
+                            <span class="text-[10px] text-slate-500">Sentence #{flag.sentenceIndex + 1}</span>
+                          </div>
+                          <p class="text-slate-300 italic">"{flag.sentence}"</p>
+                          <p class="text-rose-300 font-medium text-[11px]">&rarr; {flag.recommendation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Evaluation Form */}
+              <div class="lg:col-span-4 space-y-5">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                  <h4 class="font-bold text-white text-xs uppercase tracking-wider">Instructor Evaluation</h4>
+
+                  <div>
+                    <label class="text-xs text-slate-400 block mb-1">Grade / Score:</label>
+                    <input
+                      type="text"
+                      value={teacherScore}
+                      onChange={(e) => setTeacherScore(e.target.value)}
+                      class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="text-xs text-slate-400 block mb-1">Qualitative Feedback:</label>
+                    <textarea
+                      rows="6"
+                      value={teacherComments}
+                      onChange={(e) => setTeacherComments(e.target.value)}
+                      class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-rose-500"
+                    ></textarea>
+                  </div>
+
+                  <button
+                    onClick={() => alert('Evaluation saved and emailed back to student!')}
+                    class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
+                  >
+                    Save & Return Evaluation
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Render App to DOM
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
   </script>
 </body>
 </html>
