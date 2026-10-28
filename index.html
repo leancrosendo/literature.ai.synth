@@ -77,7 +77,7 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
 
-    // Sample initial study
+    // Initial default study
     const initialStudies = [
       {
         id: 'study-1',
@@ -88,7 +88,6 @@
         origin: 'Local (Philippines)',
         type: 'pdf',
         summary: 'This research study evaluates the efficacy and structural challenges of implementing digital pedagogy and blended learning models across tertiary institutions in the Philippines. By examining data collected from public and private universities, the paper highlights that localized digital infrastructure, strategic teacher training, and adaptive online courseware significantly enhance student self-efficacy, critical thinking, and engagement. However, persistence gaps remain due to unequal internet distribution in regional provinces. The authors recommend targeted policy interventions, open-access academic repositories, and contextualized learning tools to optimize literature analysis skills among higher education students.',
-        citationStyle: 'APA',
         extractedText: 'Digital Pedagogy & Blended Learning in Philippine Higher Education. Santos, M., & Cruz, R. 2024. This study evaluates digital pedagogy in Philippine tertiary institutions...',
         uploadTimestamp: Date.now() - 3600000,
         pdfDataUri: null,
@@ -114,7 +113,6 @@
       
       // Global App State
       const [studies, setStudies] = useState(initialStudies);
-      const [selectedCitationStyle, setSelectedCitationStyle] = useState('APA');
       const [userThemes, setUserThemes] = useState([
         { id: 'theme-1', title: 'Digital Infrastructure & Regional Access Gaps' }
       ]); 
@@ -134,19 +132,6 @@
         academicTone: 4,
         citationAccuracy: 3
       });
-
-      // Helper to generate formatted citations
-      const generateCitation = (study, style) => {
-        const { authors, year, title, journal } = study;
-        if (style === 'APA') {
-          return `${authors} (${year}). ${title}. ${journal}.`;
-        } else if (style === 'CSE') {
-          return `${authors}. ${year}. ${title}. ${journal}.`;
-        } else if (style === 'Chicago') {
-          return `${authors}. "${title}." ${journal} (${year}).`;
-        }
-        return `${authors} (${year}). ${title}. ${journal}.`;
-      };
 
       return (
         <div class="min-h-screen flex flex-col bg-slate-900 text-slate-100">
@@ -237,9 +222,6 @@
               <UploadSection
                 studies={studies}
                 setStudies={setStudies}
-                selectedCitationStyle={selectedCitationStyle}
-                setSelectedCitationStyle={setSelectedCitationStyle}
-                generateCitation={generateCitation}
                 apiKey={apiKey}
               />
             )}
@@ -248,8 +230,6 @@
               <AnnotateSection
                 studies={studies}
                 setStudies={setStudies}
-                generateCitation={generateCitation}
-                selectedCitationStyle={selectedCitationStyle}
               />
             )}
 
@@ -272,9 +252,7 @@
                 setSynthesisTitle={setSynthesisTitle}
                 synthesisText={synthesisText}
                 setSynthesisText={setSynthesisText}
-                selectedCitationStyle={selectedCitationStyle}
                 apiKey={apiKey}
-                generateCitation={generateCitation}
                 rubricScores={rubricScores}
                 setRubricScores={setRubricScores}
               />
@@ -338,7 +316,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-300">
               <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-700/50">
                 <strong class="text-blue-400 block mb-1">Step 1: Upload / Link & Summarize</strong>
-                Upload PDF files or paste website URLs, generate 250-word AI summaries, manually tag study origin, and rename studies using citations.
+                Upload PDF files or paste website URLs, generate 250-word AI summaries, manually tag study origin, and rename studies directly.
               </div>
               <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-700/50">
                 <strong class="text-amber-400 block mb-1">Step 2: Scroll, Highlight & Annotate</strong>
@@ -370,40 +348,28 @@
     // ==========================================
     // 2. UPLOAD & SUMMARIZE SECTION (Blue Theme)
     // ==========================================
-    function UploadSection({ studies, setStudies, selectedCitationStyle, setSelectedCitationStyle, generateCitation, apiKey }) {
+    function UploadSection({ studies, setStudies, apiKey }) {
       const [isUploading, setIsUploading] = useState(false);
       const [uploadProgress, setUploadProgress] = useState('');
       const [dragOver, setDragOver] = useState(false);
 
-      // Web Link Input State
+      // Web Link Input State & Rename State
       const [webUrlInput, setWebUrlInput] = useState('');
       const [selectedStudyToRename, setSelectedStudyToRename] = useState(studies[0]?.id || '');
+      const [newCustomTitle, setNewCustomTitle] = useState('');
 
-      // Citation Form State
-      const [customCitation, setCustomCitation] = useState({
-        authors: 'Dela Cruz, J., & Santos, A.',
-        year: '2025',
-        title: 'Artificial Intelligence Integration in Higher Education Literature Reviews',
-        journal: 'Journal of Philippine Academic Research'
-      });
-
-      // Rename selected study using citation tool
-      const handleRenameStudyWithCitation = () => {
-        if (!selectedStudyToRename) return;
-        const formattedTitle = `${customCitation.title} (${customCitation.authors}, ${customCitation.year})`;
+      // Rename selected study directly
+      const handleRenameStudy = (e) => {
+        e.preventDefault();
+        if (!selectedStudyToRename || !newCustomTitle.trim()) return;
 
         setStudies(studies.map(s => {
           if (s.id === selectedStudyToRename) {
-            return {
-              ...s,
-              title: formattedTitle,
-              authors: customCitation.authors,
-              year: customCitation.year,
-              journal: customCitation.journal
-            };
+            return { ...s, title: newCustomTitle.trim() };
           }
           return s;
         }));
+        setNewCustomTitle('');
       };
 
       // Generate 250-word accurate AI summary
@@ -485,9 +451,6 @@
           const newStudy = {
             id: 'study-web-' + Date.now(),
             title: fetchedTitle,
-            authors: new URL(webUrlInput).hostname,
-            year: new Date().getFullYear(),
-            journal: 'Web Publication (' + webUrlInput + ')',
             origin: 'Foreign (International)',
             type: 'web',
             url: webUrlInput,
@@ -509,7 +472,7 @@
         setUploadProgress('');
       };
 
-      // Handle PDF File Uploads
+      // Fixed Resilient PDF File Ingestion
       const handleFileUpload = async (files) => {
         if (!files || files.length === 0) return;
         setIsUploading(true);
@@ -519,10 +482,21 @@
           setUploadProgress(`Processing ${file.name} (${i + 1}/${files.length})...`);
 
           try {
-            const arrayBuffer = await file.arrayBuffer();
+            // Read PDF as Data URI for embedding canvas
+            const dataUriReader = new FileReader();
+            const dataUri = await new Promise((resolve) => {
+              dataUriReader.onload = (e) => resolve(e.target.result);
+              dataUriReader.readAsDataURL(file);
+            });
 
-            // Extract text with PDF.js
+            // Read PDF as ArrayBuffer for PDF.js Parsing
             setUploadProgress(`Extracting text from ${file.name}...`);
+            const arrayBufferReader = new FileReader();
+            const arrayBuffer = await new Promise((resolve) => {
+              arrayBufferReader.onload = (e) => resolve(e.target.result);
+              arrayBufferReader.readAsArrayBuffer(file);
+            });
+
             let extractedText = '';
             try {
               const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -534,25 +508,17 @@
                 extractedText += pageText + ' ';
               }
             } catch (pdfErr) {
-              console.warn('PDF extraction warning:', pdfErr);
-              extractedText = `Text content extracted from ${file.name}.`;
+              console.warn('PDF.js text extraction warning, using file metadata fallback:', pdfErr);
+              extractedText = `Text content extracted from uploaded research paper: ${file.name}.`;
             }
 
-            const reader = new FileReader();
-            const dataUri = await new Promise((resolve) => {
-              reader.onload = (e) => resolve(e.target.result);
-              reader.readAsDataURL(file);
-            });
-
             setUploadProgress(`Generating 250-word AI summary for ${file.name}...`);
-            const summary250 = await generate250WordSummary(extractedText, file.name, apiKey);
+            const cleanTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+            const summary250 = await generate250WordSummary(extractedText, cleanTitle, apiKey);
 
             const newStudy = {
               id: 'study-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-              title: file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
-              authors: 'Author, A. B.',
-              year: new Date().getFullYear(),
-              journal: 'Academic Research Review',
+              title: cleanTitle,
               origin: 'Local (Philippines)',
               type: 'pdf',
               summary: summary250,
@@ -565,7 +531,7 @@
             setStudies(prev => [newStudy, ...prev]);
             setSelectedStudyToRename(newStudy.id);
           } catch (err) {
-            console.error('Error processing PDF:', err);
+            console.error('Error processing PDF file:', err);
           }
         }
 
@@ -585,11 +551,11 @@
         <div class="space-y-6">
           <div class="bg-blue-950/40 border border-blue-800/60 p-5 rounded-2xl">
             <span class="px-2.5 py-1 bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
-              Section 2: PDF Upload / Web Link & 250-Word AI Summaries
+              Section 2: PDF Ingestion / Web Link & 250-Word AI Summaries
             </span>
             <h2 class="text-xl font-bold text-white mt-1">Upload PDF or Paste Web Link to Generate 250-Word Summaries</h2>
             <p class="text-xs text-blue-200/80 mt-0.5">
-              Ingest research literature from PDF documents or website URLs. Receive a 250-word AI summary, manually select study origin, and rename studies using citations.
+              Ingest research literature from PDF documents or website URLs. Receive a 250-word AI summary, manually select study origin, and rename studies.
             </p>
           </div>
 
@@ -647,7 +613,7 @@
                   accept="application/pdf"
                   multiple
                   class="hidden"
-                  onChange={(e) => handleFileUpload(e.dataTransfer.files)}
+                  onChange={(e) => handleFileUpload(e.target.files)}
                 />
               </label>
 
@@ -659,90 +625,36 @@
             </div>
           </div>
 
-          {/* Embedded Citation Generator & Study Renaming Tool */}
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-              <h3 class="font-bold text-white text-sm">Embedded Citation Generator & Study Renaming Tool</h3>
-              <div class="flex gap-1">
-                {['APA', 'CSE', 'Chicago'].map(style => (
-                  <button
-                    key={style}
-                    onClick={() => setSelectedCitationStyle(style)}
-                    class={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                      selectedCitationStyle === style
-                        ? 'bg-blue-600 text-white shadow'
-                        : 'bg-slate-800 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {style}
-                  </button>
+          {/* Direct Study Renaming Tool */}
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+            <h3 class="font-bold text-white text-sm">Rename Summarized Study</h3>
+            <form onSubmit={handleRenameStudy} class="flex flex-wrap items-center gap-2">
+              <select
+                value={selectedStudyToRename}
+                onChange={(e) => setSelectedStudyToRename(e.target.value)}
+                class="bg-slate-950 border border-slate-800 text-xs text-white rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500"
+              >
+                {studies.map(s => (
+                  <option key={s.id} value={s.id}>{s.title.substring(0, 35)}...</option>
                 ))}
-              </div>
-            </div>
+              </select>
 
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
               <input
                 type="text"
-                placeholder="Authors (e.g. Santos, M., & Cruz, R.)"
-                value={customCitation.authors}
-                onChange={(e) => setCustomCitation({ ...customCitation, authors: e.target.value })}
-                class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                required
+                placeholder="Enter new study title..."
+                value={newCustomTitle}
+                onChange={(e) => setNewCustomTitle(e.target.value)}
+                class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 min-w-[200px]"
               />
-              <input
-                type="text"
-                placeholder="Year (e.g. 2024)"
-                value={customCitation.year}
-                onChange={(e) => setCustomCitation({ ...customCitation, year: e.target.value })}
-                class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="Study Title"
-                value={customCitation.title}
-                onChange={(e) => setCustomCitation({ ...customCitation, title: e.target.value })}
-                class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="Journal / Publisher"
-                value={customCitation.journal}
-                onChange={(e) => setCustomCitation({ ...customCitation, journal: e.target.value })}
-                class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
 
-            {/* Study Renaming Selector */}
-            <div class="bg-slate-950 p-3 rounded-xl border border-blue-900/60 flex flex-wrap items-center justify-between gap-3">
-              <div class="flex items-center gap-2 flex-1">
-                <span class="text-xs text-slate-400 font-medium">Select Study to Rename:</span>
-                <select
-                  value={selectedStudyToRename}
-                  onChange={(e) => setSelectedStudyToRename(e.target.value)}
-                  class="bg-slate-900 border border-slate-800 text-xs text-white rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500"
-                >
-                  {studies.map(s => (
-                    <option key={s.id} value={s.id}>{s.title.substring(0, 30)}...</option>
-                  ))}
-                </select>
-              </div>
-
-              <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleRenameStudyWithCitation}
-                  class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg shadow shrink-0"
-                >
-                  Rename Study with Citation
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(generateCitation(customCitation, selectedCitationStyle))}
-                  class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-lg shadow shrink-0"
-                >
-                  Copy Citation
-                </button>
-              </div>
-            </div>
+              <button
+                type="submit"
+                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow transition-all shrink-0"
+              >
+                Rename Study
+              </button>
+            </form>
           </div>
 
           {/* Processed Studies List */}
@@ -792,11 +704,6 @@
                     </div>
                   </div>
 
-                  <div class="bg-slate-950/80 p-2.5 rounded-lg text-xs font-mono text-blue-300 border border-slate-800 flex items-center justify-between gap-2">
-                    <span>{generateCitation(study, selectedCitationStyle)}</span>
-                    <span class="text-[10px] text-slate-500 uppercase">{selectedCitationStyle}</span>
-                  </div>
-
                   <div class="bg-slate-900 p-3.5 rounded-xl border border-slate-800 space-y-1">
                     <div class="flex items-center justify-between">
                       <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">
@@ -819,7 +726,7 @@
     // ==========================================
     // 3. ANNOTATE & EVALUATE SECTION WITH HIGHLIGHTER (Amber Theme)
     // ==========================================
-    function AnnotateSection({ studies, setStudies, generateCitation, selectedCitationStyle }) {
+    function AnnotateSection({ studies, setStudies }) {
       const [selectedStudyId, setSelectedStudyId] = useState(studies[0]?.id || '');
       const [newAnnoText, setNewAnnoText] = useState('');
       const [newAnnoType, setNewAnnoType] = useState('key_insight');
@@ -830,10 +737,10 @@
       const [pdfTotalPages, setPdfTotalPages] = useState(1);
       const canvasRef = useRef(null);
 
-      // PDF Highlighter Tool State
+      // PDF Canvas Highlighter Tool State
       const [isHighlighterActive, setIsHighlighterActive] = useState(false);
       const [highlightColor, setHighlightColor] = useState('#fef08a'); // Default Yellow
-      const [highlights, setHighlights] = useState([]); // [{ id, page, x, y, width, height, color }]
+      const [highlights, setHighlights] = useState([]);
       const [isDrawingHighlight, setIsDrawingHighlight] = useState(false);
       const [highlightStartPos, setHighlightStartPos] = useState(null);
 
@@ -870,7 +777,7 @@
 
             await page.render({ canvasContext: context, viewport: viewport }).promise;
 
-            // Draw saved highlights for this page onto PDF canvas
+            // Draw saved highlights onto PDF canvas
             context.save();
             highlights.filter(h => h.page === pdfPageNum).forEach(h => {
               context.fillStyle = h.color;
@@ -978,7 +885,6 @@
 
                 {/* PDF Controls & Highlighter Toolbar */}
                 <div class="flex flex-wrap items-center gap-2">
-                  {/* Highlighter Toggle */}
                   <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
                     <button
                       type="button"
@@ -990,7 +896,6 @@
                       {isHighlighterActive ? 'Highlighter ON' : 'Highlighter OFF'}
                     </button>
 
-                    {/* Color Swatches */}
                     {isHighlighterActive && (
                       <div class="flex items-center gap-1 pl-1">
                         {[
@@ -1304,9 +1209,7 @@
       setSynthesisTitle,
       synthesisText,
       setSynthesisText,
-      selectedCitationStyle,
       apiKey,
-      generateCitation,
       rubricScores,
       setRubricScores
     }) {
@@ -1343,12 +1246,12 @@
           }
         },
         citationAccuracy: {
-          title: "4. Citation Accuracy (" + selectedCitationStyle + " Style)",
+          title: "4. Citation Accuracy & In-Text Attribution",
           levels: {
-            1: "Level 1 (Emerging): Missing in-text parenthetical citations or violates basic formatting rules.",
-            2: "Level 2 (Developing): Includes parenthetical citations, but exhibits formatting errors in author lists or dates.",
-            3: "Level 3 (Proficient): Accurately applies " + selectedCitationStyle + " guidelines with minor punctuation errors.",
-            4: "Level 4 (Exemplary): Flawlessly formats all in-text citations and reference lists following " + selectedCitationStyle + " standards."
+            1: "Level 1 (Emerging): Missing in-text parenthetical citations or violates basic academic attribution rules.",
+            2: "Level 2 (Developing): Includes parenthetical citations, but exhibits formatting errors in author lists or publication dates.",
+            3: "Level 3 (Proficient): Accurately applies in-text attribution guidelines with minor punctuation errors.",
+            4: "Level 4 (Exemplary): Flawlessly formats all in-text parenthetical citations and attribution statements."
           }
         }
       };
@@ -1359,11 +1262,11 @@
 
         if (apiKey && apiKey.trim().length > 10) {
           try {
-            const prompt = `Act as an academic research coach. Evaluate this student literature synthesis against ${selectedCitationStyle} style and active themes.
+            const prompt = `Act as an academic research coach. Evaluate this student literature synthesis against active themes.
 Provide feedback on:
 1. Grammar & Punctuation
 2. Structural Flow & Thematic Synthesis
-3. Citation Accuracy (${selectedCitationStyle})
+3. In-Text Citation Accuracy
 
 Synthesis Draft:
 "${synthesisText}"
@@ -1399,12 +1302,12 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
           if (!synthesisText.includes('(') || !synthesisText.includes(')')) {
             feedback.push({
               type: 'citation',
-              suggestion: `In-text citations are missing. Format citations following ${selectedCitationStyle} guidelines (e.g. Santos & Cruz, 2024).`
+              suggestion: 'In-text citations are missing. Include parenthetical author attributions (e.g., Santos & Cruz, 2024).'
             });
           } else {
             feedback.push({
               type: 'citation',
-              suggestion: `In-text parenthetical citations detected. Ensure author surnames match the source list.`
+              suggestion: 'In-text parenthetical citations detected. Ensure author surnames match the source list.'
             });
           }
 
@@ -1443,11 +1346,10 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
             </p>
           </div>
 
-          {/* Printable Header - Visible during Print Export */}
           <div class="hidden print:block mb-6 border-b pb-4">
             <h1 class="text-2xl font-bold text-black">{synthesisTitle || 'Academic Literature Review Synthesis'}</h1>
             <p class="text-xs text-slate-600 mt-1">
-              Generated via SynthesizeAI Platform &bull; Citation Style: {selectedCitationStyle} &bull; Self-Evaluation Score: {Object.values(rubricScores).reduce((a, b) => a + b, 0)}/16
+              Generated via SynthesizeAI Platform &bull; Self-Evaluation Score: {Object.values(rubricScores).reduce((a, b) => a + b, 0)}/16
             </p>
           </div>
 
@@ -1542,7 +1444,7 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
                 </div>
               )}
 
-              {/* Student Self-Evaluation Rubric with Detailed Descriptors */}
+              {/* Student Self-Evaluation Rubric */}
               <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 print-card">
                 <h4 class="font-bold text-white text-xs uppercase tracking-wider print-text">
                   Detailed Student Self-Evaluation Rubric
