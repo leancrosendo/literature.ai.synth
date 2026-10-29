@@ -3,10 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SynthesizeAI - Research Synthesis & AI Feedback Microsite</title>
+  <title>SynthesizeAI - Research Synthesis Platform</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              500: '#0284c7',
+              600: '#0284c7',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
   
   <!-- React & ReactDOM CDN -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -15,7 +32,7 @@
   <!-- Babel Standalone for JSX transformation -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- PDF.js CDN for in-browser PDF text parsing and canvas rendering -->
+  <!-- PDF.js CDN for in-browser PDF parsing and canvas rendering -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script>
     if (window['pdfjs-dist/build/pdf']) {
@@ -27,21 +44,22 @@
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
     body {
       font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: background-color 0.3s ease, color 0.3s ease;
     }
     .custom-scrollbar::-webkit-scrollbar {
       width: 6px;
       height: 6px;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
-      background: #0f172a;
+      background: rgba(15, 23, 42, 0.2);
       border-radius: 4px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #334155;
+      background: rgba(100, 116, 139, 0.4);
       border-radius: 4px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: #475569;
+      background: rgba(100, 116, 139, 0.6);
     }
     
     /* Print Optimized Styles */
@@ -71,8 +89,48 @@
     }
   </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen antialiased">
+<body class="bg-slate-900 text-slate-100 min-h-screen antialiased dark">
   <div id="root"></div>
+
+  <!-- Firebase Import Module -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { 
+      getAuth, 
+      signInAnonymously, 
+      signInWithCustomToken, 
+      onAuthStateChanged,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { 
+      getFirestore, 
+      doc, 
+      getDoc, 
+      setDoc, 
+      updateDoc, 
+      collection, 
+      onSnapshot,
+      query
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Attach to global scope for React usage
+    window.FirebaseAPI = {
+      initializeApp,
+      getAuth,
+      signInAnonymously,
+      signInWithCustomToken,
+      onAuthStateChanged,
+      signOut,
+      getFirestore,
+      doc,
+      getDoc,
+      setDoc,
+      updateDoc,
+      collection,
+      onSnapshot,
+      query
+    };
+  </script>
 
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
@@ -109,9 +167,21 @@
     ];
 
     function App() {
-      const [activeTab, setActiveTab] = useState('intro'); // 'intro', 'upload', 'annotate', 'cluster', 'synthesis'
+      // Dark/Light Theme State
+      const [isDarkMode, setIsDarkMode] = useState(true);
+
+      // Tab Navigation State
+      const [activeTab, setActiveTab] = useState('intro'); // 'intro', 'upload', 'annotate', 'cluster', 'synthesis', 'teacher'
       
-      // Global App State
+      // Firebase & User Authentication State
+      const [user, setUser] = useState(null);
+      const [userRole, setUserRole] = useState('student'); // 'student' or 'teacher'
+      const [userName, setUserName] = useState('Student Researcher');
+      const [authLoading, setAuthLoading] = useState(true);
+      const [dbInstance, setDbInstance] = useState(null);
+      const [appIdVal, setAppIdVal] = useState('default-app-id');
+
+      // Global App Data State
       const [studies, setStudies] = useState(initialStudies);
       const [userThemes, setUserThemes] = useState([
         { id: 'theme-1', title: 'Digital Infrastructure & Regional Access Gaps' }
@@ -125,7 +195,7 @@
       const [synthesisText, setSynthesisText] = useState('');
       const [apiKey, setApiKey] = useState('');
 
-      // Detailed Rubric Scores State
+      // Rubric Scores State
       const [rubricScores, setRubricScores] = useState({
         thematicIntegration: 4,
         criticalSynthesis: 3,
@@ -133,27 +203,157 @@
         citationAccuracy: 3
       });
 
+      // Submission & Teacher Feedback State
+      const [submissionStatus, setSubmissionStatus] = useState('draft'); // 'draft', 'submitted', 'reviewed'
+      const [teacherFeedback, setTeacherFeedback] = useState({
+        grade: '',
+        comments: '',
+        reviewedAt: null
+      });
+
+      // Initialize Firebase & Auth
+      useEffect(() => {
+        const timer = setTimeout(() => {
+          if (window.FirebaseAPI) {
+            const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore } = window.FirebaseAPI;
+            
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'synthesize-ai-app';
+            setAppIdVal(appId);
+
+            let firebaseConfig = {};
+            if (typeof __firebase_config !== 'undefined') {
+              try { firebaseConfig = JSON.parse(__firebase_config); } catch (e) {}
+            }
+
+            if (Object.keys(firebaseConfig).length > 0) {
+              const app = initializeApp(firebaseConfig);
+              const auth = getAuth(app);
+              const db = getFirestore(app);
+              setDbInstance(db);
+
+              const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+              
+              if (initialToken) {
+                signInWithCustomToken(auth, initialToken).catch(() => signInAnonymously(auth));
+              } else {
+                signInAnonymously(auth);
+              }
+
+              onAuthStateChanged(auth, (currentUser) => {
+                if (currentUser) {
+                  setUser(currentUser);
+                }
+                setAuthLoading(false);
+              });
+            } else {
+              setAuthLoading(false);
+            }
+          } else {
+            setAuthLoading(false);
+          }
+        }, 300);
+        return () => clearTimeout(timer);
+      }, []);
+
+      // Load persistent progress from Firestore
+      useEffect(() => {
+        if (!user || !dbInstance) return;
+        const { doc, onSnapshot } = window.FirebaseAPI;
+
+        // FIXED: Firestore document paths MUST have an even number of segments (e.g., collection/doc/collection/doc)
+        // Previous path had 5 segments (artifacts/appId/public/data/user_id) which threw an error.
+        // New path has 4 segments: artifacts -> appId -> users -> userId
+        const docRef = doc(dbInstance, 'artifacts', appIdVal, 'users', user.uid);
+        
+        const unsubscribe = onSnapshot(docRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            if (data.studies) setStudies(data.studies);
+            if (data.userThemes) setUserThemes(data.userThemes);
+            if (data.themeAssignments) setThemeAssignments(data.themeAssignments);
+            if (data.synthesisTitle) setSynthesisTitle(data.synthesisTitle);
+            if (data.synthesisText) setSynthesisText(data.synthesisText);
+            if (data.rubricScores) setRubricScores(data.rubricScores);
+            if (data.submissionStatus) setSubmissionStatus(data.submissionStatus);
+            if (data.teacherFeedback) setTeacherFeedback(data.teacherFeedback);
+            if (data.userName) setUserName(data.userName);
+            if (data.userRole) setUserRole(data.userRole);
+          }
+        }, (error) => {
+          console.warn('Firestore subscription error:', error);
+        });
+
+        return () => unsubscribe();
+      }, [user, dbInstance, appIdVal]);
+
+      // Save persistent progress to Firestore
+      const saveProgressToCloud = async () => {
+        if (!user || !dbInstance) return;
+        const { doc, setDoc } = window.FirebaseAPI;
+
+        try {
+          // FIXED: 4 segments (even number required by Firestore)
+          const docRef = doc(dbInstance, 'artifacts', appIdVal, 'users', user.uid);
+          await setDoc(docRef, {
+            uid: user.uid,
+            userName,
+            userRole,
+            studies,
+            userThemes,
+            themeAssignments,
+            synthesisTitle,
+            synthesisText,
+            rubricScores,
+            submissionStatus,
+            teacherFeedback,
+            updatedAt: Date.now()
+          }, { merge: true });
+        } catch (err) {
+          console.warn('Cloud save error:', err);
+        }
+      };
+
+      // Auto-save on data changes
+      useEffect(() => {
+        if (user && dbInstance) {
+          saveProgressToCloud();
+        }
+      }, [studies, userThemes, themeAssignments, synthesisTitle, synthesisText, rubricScores, submissionStatus, teacherFeedback, userRole, userName]);
+
+      // Toggle Theme Class on Body
+      useEffect(() => {
+        if (isDarkMode) {
+          document.body.classList.add('dark');
+          document.body.classList.remove('bg-slate-50', 'text-slate-800');
+          document.body.classList.add('bg-slate-900', 'text-slate-100');
+        } else {
+          document.body.classList.remove('dark');
+          document.body.classList.remove('bg-slate-900', 'text-slate-100');
+          document.body.classList.add('bg-slate-50', 'text-slate-800');
+        }
+      }, [isDarkMode]);
+
       return (
-        <div class="min-h-screen flex flex-col bg-slate-900 text-slate-100">
-          {/* Header Navigation */}
-          <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50 no-print">
+        <div class={`min-h-screen flex flex-col ${isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
+          {/* Header Navigation Bar */}
+          <header class={`border-b sticky top-0 z-50 no-print backdrop-blur ${isDarkMode ? 'border-slate-800 bg-slate-950/90' : 'border-slate-200 bg-white/90'}`}>
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <div class="p-2 bg-indigo-600 rounded-lg text-white font-bold text-xl tracking-wider">
+                <div class="p-2 bg-indigo-600 rounded-xl text-white font-bold text-xl tracking-wider shadow-lg">
                   S<span class="text-indigo-300">AI</span>
                 </div>
                 <div>
-                  <h1 class="font-bold text-lg text-white leading-none">SynthesizeAI</h1>
-                  <p class="text-xs text-slate-400">Research Synthesis & Self-Evaluation Platform</p>
+                  <h1 class={`font-bold text-lg leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>SynthesizeAI</h1>
+                  <p class="text-xs text-slate-400">Research Synthesis & Teacher Feedback Portal</p>
                 </div>
               </div>
 
               {/* Navigation Tabs */}
-              <nav class="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto">
+              <nav class={`flex items-center gap-1 p-1 rounded-xl border overflow-x-auto ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
                 <button
                   onClick={() => setActiveTab('intro')}
                   class={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                    activeTab === 'intro' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                    activeTab === 'intro' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   1. Purpose
@@ -190,16 +390,58 @@
                 >
                   5. Synthesis & Rubric
                 </button>
+                <button
+                  onClick={() => setActiveTab('teacher')}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                    activeTab === 'teacher' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  6. Teacher Feedback Portal
+                </button>
               </nav>
+
+              {/* Dark/Light Toggle & User Profile Controls */}
+              <div class="flex items-center gap-3">
+                {/* Theme Switcher Button */}
+                <button
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  class={`p-2 rounded-xl border transition-all ${
+                    isDarkMode ? 'bg-slate-800 border-slate-700 text-amber-300' : 'bg-slate-100 border-slate-300 text-slate-700'
+                  }`}
+                  title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                >
+                  {isDarkMode ? '☀️' : '🌙'}
+                </button>
+
+                {/* Role Toggle Selector */}
+                <div class={`flex items-center gap-1 p-1 rounded-xl border text-xs ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+                  <button
+                    onClick={() => setUserRole('student')}
+                    class={`px-2.5 py-1 rounded-lg font-bold text-[10px] transition-all ${
+                      userRole === 'student' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'
+                    }`}
+                  >
+                    Student
+                  </button>
+                  <button
+                    onClick={() => setUserRole('teacher')}
+                    class={`px-2.5 py-1 rounded-lg font-bold text-[10px] transition-all ${
+                      userRole === 'teacher' ? 'bg-purple-600 text-white shadow' : 'text-slate-400'
+                    }`}
+                  >
+                    Teacher
+                  </button>
+                </div>
+              </div>
             </div>
           </header>
 
-          {/* Gemini API Key Bar */}
-          <div class="bg-slate-950 border-b border-slate-800 px-4 py-2 text-xs text-slate-400 no-print">
+          {/* Gemini API Key Control Bar */}
+          <div class={`border-b px-4 py-2 text-xs no-print ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
             <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
               <div class="flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>Optional Gemini API Key (Enables Live Deep AI Summaries & Custom AI Coaching):</span>
+                <span>Optional Gemini API Key (Enables Deep AI Summaries & Live AI Coaching):</span>
               </div>
               <div class="flex items-center gap-2">
                 <input
@@ -207,22 +449,25 @@
                   placeholder="Paste Gemini API Key..."
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  class="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-slate-200 focus:outline-none focus:border-indigo-500 w-64"
+                  class={`rounded px-2.5 py-1 text-xs focus:outline-none w-64 ${
+                    isDarkMode ? 'bg-slate-900 border border-slate-700 text-slate-200 focus:border-indigo-500' : 'bg-white border border-slate-300 text-slate-800 focus:border-indigo-500'
+                  }`}
                 />
-                <span class="text-slate-500 text-[10px]">(Client-side execution)</span>
+                <span class="text-slate-400 text-[10px]">(Client-side execution)</span>
               </div>
             </div>
           </div>
 
-          {/* Main Content Router */}
+          {/* Main View Router */}
           <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 print-container">
-            {activeTab === 'intro' && <IntroSection setActiveTab={setActiveTab} />}
+            {activeTab === 'intro' && <IntroSection setActiveTab={setActiveTab} isDarkMode={isDarkMode} />}
             
             {activeTab === 'upload' && (
               <UploadSection
                 studies={studies}
                 setStudies={setStudies}
                 apiKey={apiKey}
+                isDarkMode={isDarkMode}
               />
             )}
 
@@ -230,6 +475,7 @@
               <AnnotateSection
                 studies={studies}
                 setStudies={setStudies}
+                isDarkMode={isDarkMode}
               />
             )}
 
@@ -240,6 +486,7 @@
                 setUserThemes={setUserThemes}
                 themeAssignments={themeAssignments}
                 setThemeAssignments={setThemeAssignments}
+                isDarkMode={isDarkMode}
               />
             )}
 
@@ -255,80 +502,101 @@
                 apiKey={apiKey}
                 rubricScores={rubricScores}
                 setRubricScores={setRubricScores}
+                submissionStatus={submissionStatus}
+                setSubmissionStatus={setSubmissionStatus}
+                teacherFeedback={teacherFeedback}
+                isDarkMode={isDarkMode}
+              />
+            )}
+
+            {activeTab === 'teacher' && (
+              <TeacherFeedbackPortal
+                studies={studies}
+                userThemes={userThemes}
+                themeAssignments={themeAssignments}
+                synthesisTitle={synthesisTitle}
+                synthesisText={synthesisText}
+                rubricScores={rubricScores}
+                submissionStatus={submissionStatus}
+                setSubmissionStatus={setSubmissionStatus}
+                teacherFeedback={teacherFeedback}
+                setTeacherFeedback={setTeacherFeedback}
+                userName={userName}
+                isDarkMode={isDarkMode}
               />
             )}
           </main>
 
           {/* Footer */}
-          <footer class="border-t border-slate-800 bg-slate-950 py-4 text-center text-xs text-slate-500 no-print">
-            <p>SynthesizeAI &copy; 2026 Academic Research & Literature Review Platform.</p>
+          <footer class={`border-t py-4 text-center text-xs no-print ${isDarkMode ? 'border-slate-800 bg-slate-950 text-slate-500' : 'border-slate-200 bg-white text-slate-400'}`}>
+            <p>SynthesizeAI &copy; 2026 Academic Research & Teacher Feedback Platform.</p>
           </footer>
         </div>
       );
     }
 
     // ==========================================
-    // 1. INTRODUCTION SECTION (Slate Theme)
+    // 1. INTRODUCTION SECTION
     // ==========================================
-    function IntroSection({ setActiveTab }) {
+    function IntroSection({ setActiveTab, isDarkMode }) {
       return (
         <div class="space-y-6 max-w-4xl mx-auto">
-          <div class="bg-gradient-to-r from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 shadow-lg">
-            <span class="inline-block px-3 py-1 bg-slate-700 text-slate-200 rounded-full text-xs font-semibold uppercase tracking-wider mb-3">
-              Section 1: Purpose & Literature Synthesis Guidance
+          <div class={`p-6 rounded-2xl border shadow-lg ${isDarkMode ? 'bg-gradient-to-r from-slate-800 to-slate-900 border-slate-700' : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-indigo-100'}`}>
+            <span class={`inline-block px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-3 ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-indigo-100 text-indigo-700'}`}>
+              Section 1: Purpose & Ethical AI Guidance
             </span>
-            <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">
+            <h2 class={`text-2xl sm:text-3xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
               How Students Can Effectively Use AI Tools in Improving Literature Reviews
             </h2>
-            <p class="text-slate-300 text-sm leading-relaxed">
-              SynthesizeAI bridges academic rigor with artificial intelligence. Instead of generating unverified or hallucinated literature reviews, this platform empowers you to analyze, annotate, and cluster empirical evidence while maintaining your role as the primary researcher.
+            <p class={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+              SynthesizeAI bridges academic rigor with artificial intelligence. Instead of generating unverified literature reviews, this platform empowers you to analyze, annotate, and cluster empirical evidence while maintaining your role as the primary researcher.
             </p>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700/80">
-              <div class="w-10 h-10 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-lg mb-3">1</div>
-              <h3 class="font-semibold text-white mb-1">Detailed AI Summaries</h3>
-              <p class="text-xs text-slate-400 leading-relaxed">
+            <div class={`p-5 rounded-xl border ${isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div class="w-10 h-10 rounded-lg bg-blue-500/20 text-blue-500 flex items-center justify-center font-bold text-lg mb-3">1</div>
+              <h3 class={`font-semibold mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Detailed AI Summaries</h3>
+              <p class={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                 Extract accurate 250-word research overviews from uploaded PDFs or pasted website links covering objectives, methodology, localized context, and findings.
               </p>
             </div>
 
-            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700/80">
-              <div class="w-10 h-10 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg mb-3">2</div>
-              <h3 class="font-semibold text-white mb-1">PDF Reader & Highlighter</h3>
-              <p class="text-xs text-slate-400 leading-relaxed">
+            <div class={`p-5 rounded-xl border ${isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div class="w-10 h-10 rounded-lg bg-amber-500/20 text-amber-500 flex items-center justify-center font-bold text-lg mb-3">2</div>
+              <h3 class={`font-semibold mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>PDF Reader & Highlighter</h3>
+              <p class={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                 Scroll through multi-page PDF files directly inside the application while creating color-coded highlights and critical tags.
               </p>
             </div>
 
-            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700/80">
-              <div class="w-10 h-10 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-lg mb-3">3</div>
-              <h3 class="font-semibold text-white mb-1">Printable PDF Export</h3>
-              <p class="text-xs text-slate-400 leading-relaxed">
-                Transform your draft, active thematic matrix, and detailed self-evaluation rubric scores into a printable PDF document.
+            <div class={`p-5 rounded-xl border ${isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div class="w-10 h-10 rounded-lg bg-purple-500/20 text-purple-500 flex items-center justify-center font-bold text-lg mb-3">3</div>
+              <h3 class={`font-semibold mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Teacher Feedback Portal</h3>
+              <p class={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                Submit synthesis drafts for live instructor evaluation, diagnostic sentence flagging, and detailed rubric grading.
               </p>
             </div>
           </div>
 
-          <div class="bg-slate-800/40 p-6 rounded-2xl border border-slate-700/60 space-y-4">
-            <h3 class="font-bold text-white text-base">Step-by-Step Synthesis Workflow</h3>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-300">
-              <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-700/50">
-                <strong class="text-blue-400 block mb-1">Step 1: Upload / Link & Summarize</strong>
-                Upload PDF files or paste website URLs, generate 250-word AI summaries, manually tag study origin, and rename studies directly.
+          <div class={`p-6 rounded-2xl border space-y-4 ${isDarkMode ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <h3 class={`font-bold text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Step-by-Step Synthesis Workflow</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-700/50 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                <strong class="text-blue-500 block mb-1">Step 1: Upload / Link & Summarize</strong>
+                Upload PDF files or paste website URLs, generate 250-word AI summaries, manually tag study origin, and rename studies.
               </div>
-              <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-700/50">
-                <strong class="text-amber-400 block mb-1">Step 2: Scroll, Highlight & Annotate</strong>
-                Browse PDF pages, apply visual color highlighters, and tag findings into <span class="text-emerald-400">Key Insight</span>, <span class="text-rose-400">Critique</span>, <span class="text-amber-400">Recommendation</span>, or <span class="text-purple-400">Limitations</span>.
+              <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-700/50 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                <strong class="text-amber-500 block mb-1">Step 2: Scroll, Highlight & Annotate</strong>
+                Browse PDF pages, apply visual color highlighters, and tag findings into <span class="text-emerald-500">Key Insight</span>, <span class="text-rose-500">Critique</span>, <span class="text-amber-500">Recommendation</span>, or <span class="text-purple-500">Limitations</span>.
               </div>
-              <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-700/50">
-                <strong class="text-emerald-400 block mb-1">Step 3: Define Themes</strong>
+              <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-700/50 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                <strong class="text-emerald-500 block mb-1">Step 3: Define Themes</strong>
                 Create custom thematic headings and group tagged statements to construct your qualitative synthesis matrix.
               </div>
-              <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-700/50">
-                <strong class="text-indigo-400 block mb-1">Step 4: Draft, Evaluate & Export</strong>
-                Draft synthesis narrative with AI assistance, score using detailed rubric criteria, and export to printable PDF.
+              <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-700/50 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                <strong class="text-indigo-500 block mb-1">Step 4: Draft, Evaluate & Submit</strong>
+                Draft synthesis narrative with AI assistance, score using rubric criteria, and submit to your teacher for diagnostic review.
               </div>
             </div>
 
@@ -346,19 +614,17 @@
     }
 
     // ==========================================
-    // 2. UPLOAD & SUMMARIZE SECTION (Blue Theme)
+    // 2. UPLOAD & SUMMARIZE SECTION
     // ==========================================
-    function UploadSection({ studies, setStudies, apiKey }) {
+    function UploadSection({ studies, setStudies, apiKey, isDarkMode }) {
       const [isUploading, setIsUploading] = useState(false);
       const [uploadProgress, setUploadProgress] = useState('');
       const [dragOver, setDragOver] = useState(false);
 
-      // Web Link Input State & Rename State
       const [webUrlInput, setWebUrlInput] = useState('');
       const [selectedStudyToRename, setSelectedStudyToRename] = useState(studies[0]?.id || '');
       const [newCustomTitle, setNewCustomTitle] = useState('');
 
-      // Rename selected study directly
       const handleRenameStudy = (e) => {
         e.preventDefault();
         if (!selectedStudyToRename || !newCustomTitle.trim()) return;
@@ -372,7 +638,6 @@
         setNewCustomTitle('');
       };
 
-      // Generate 250-word accurate AI summary
       const generate250WordSummary = async (extractedText, title, apiKey) => {
         if (apiKey && apiKey.trim().length > 10) {
           try {
@@ -394,7 +659,6 @@
           }
         }
 
-        // Local fallback ~250-word summary generator
         const cleanText = extractedText.replace(/\s+/g, ' ').trim();
         const sentences = cleanText.split(/(?<=[.!?])\s+/).filter(s => s.length > 20);
         
@@ -414,7 +678,6 @@
         return summaryParts.join(' ');
       };
 
-      // Handle Web Link Summarization
       const handleSummarizeWebUrl = async (e) => {
         e.preventDefault();
         if (!webUrlInput.trim()) return;
@@ -436,7 +699,6 @@
             const paragraphs = Array.from(doc.querySelectorAll('p')).map(p => p.innerText);
             fetchedText = paragraphs.join(' ');
           } catch (err) {
-            console.warn('Direct web fetch failed, using URL metadata:', err);
             fetchedTitle = 'Web Article from ' + new URL(webUrlInput).hostname;
             fetchedText = `Content extracted from web article hosted at ${webUrlInput}. The article examines contemporary educational models and technological integrations in research reviews.`;
           }
@@ -472,7 +734,6 @@
         setUploadProgress('');
       };
 
-      // Fixed Resilient PDF File Ingestion
       const handleFileUpload = async (files) => {
         if (!files || files.length === 0) return;
         setIsUploading(true);
@@ -482,14 +743,12 @@
           setUploadProgress(`Processing ${file.name} (${i + 1}/${files.length})...`);
 
           try {
-            // Read PDF as Data URI for embedding canvas
             const dataUriReader = new FileReader();
             const dataUri = await new Promise((resolve) => {
               dataUriReader.onload = (e) => resolve(e.target.result);
               dataUriReader.readAsDataURL(file);
             });
 
-            // Read PDF as ArrayBuffer for PDF.js Parsing
             setUploadProgress(`Extracting text from ${file.name}...`);
             const arrayBufferReader = new FileReader();
             const arrayBuffer = await new Promise((resolve) => {
@@ -508,7 +767,6 @@
                 extractedText += pageText + ' ';
               }
             } catch (pdfErr) {
-              console.warn('PDF.js text extraction warning, using file metadata fallback:', pdfErr);
               extractedText = `Text content extracted from uploaded research paper: ${file.name}.`;
             }
 
@@ -549,20 +807,20 @@
 
       return (
         <div class="space-y-6">
-          <div class="bg-blue-950/40 border border-blue-800/60 p-5 rounded-2xl">
-            <span class="px-2.5 py-1 bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+          <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-blue-950/40 border-blue-800/60' : 'bg-blue-50 border-blue-200'}`}>
+            <span class={`px-2.5 py-1 border rounded-full text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'bg-blue-600/30 text-blue-300 border-blue-500/30' : 'bg-blue-100 text-blue-800 border-blue-300'}`}>
               Section 2: PDF Ingestion / Web Link & 250-Word AI Summaries
             </span>
-            <h2 class="text-xl font-bold text-white mt-1">Upload PDF or Paste Web Link to Generate 250-Word Summaries</h2>
-            <p class="text-xs text-blue-200/80 mt-0.5">
+            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Upload PDF or Paste Web Link to Generate 250-Word Summaries</h2>
+            <p class={`text-xs mt-0.5 ${isDarkMode ? 'text-blue-200/80' : 'text-blue-900/80'}`}>
               Ingest research literature from PDF documents or website URLs. Receive a 250-word AI summary, manually select study origin, and rename studies.
             </p>
           </div>
 
           {/* Web URL Link Summarizer Card */}
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-            <h3 class="font-bold text-white text-sm flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+          <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <h3 class={`font-bold text-sm flex items-center gap-2 mb-3 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+              <span class="w-2 h-2 rounded-full bg-blue-500"></span>
               <span>Paste Website / Article Link to Summarize</span>
             </h3>
             <form onSubmit={handleSummarizeWebUrl} class="flex gap-2">
@@ -572,7 +830,9 @@
                 placeholder="Paste website URL (e.g., https://journal.org/article-123)..."
                 value={webUrlInput}
                 onChange={(e) => setWebUrlInput(e.target.value)}
-                class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                class={`flex-1 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-500 border ${
+                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'
+                }`}
               />
               <button
                 type="submit"
@@ -594,14 +854,16 @@
               handleFileUpload(e.dataTransfer.files);
             }}
             class={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${
-              dragOver ? 'border-blue-400 bg-blue-950/30' : 'border-slate-700 bg-slate-900/50 hover:border-blue-500/50'
+              dragOver 
+                ? 'border-blue-400 bg-blue-950/30' 
+                : isDarkMode ? 'border-slate-700 bg-slate-900/50 hover:border-blue-500/50' : 'border-slate-300 bg-white hover:border-blue-500'
             }`}
           >
             <div class="max-w-md mx-auto space-y-3">
-              <div class="w-12 h-12 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center mx-auto text-xl font-bold">
+              <div class="w-12 h-12 rounded-full bg-blue-600/20 text-blue-500 flex items-center justify-center mx-auto text-xl font-bold">
                 &#8682;
               </div>
-              <h3 class="text-base font-semibold text-white">Upload Research PDF File</h3>
+              <h3 class={`text-base font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Upload Research PDF File</h3>
               <p class="text-xs text-slate-400">Drag and drop PDF files or select from device</p>
 
               <label class="inline-block cursor-pointer">
@@ -626,13 +888,15 @@
           </div>
 
           {/* Direct Study Renaming Tool */}
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-            <h3 class="font-bold text-white text-sm">Rename Summarized Study</h3>
+          <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <h3 class={`font-bold text-sm mb-3 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Rename Summarized Study</h3>
             <form onSubmit={handleRenameStudy} class="flex flex-wrap items-center gap-2">
               <select
                 value={selectedStudyToRename}
                 onChange={(e) => setSelectedStudyToRename(e.target.value)}
-                class="bg-slate-950 border border-slate-800 text-xs text-white rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500"
+                class={`rounded-xl px-3 py-2 text-xs border focus:outline-none focus:border-blue-500 ${
+                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'
+                }`}
               >
                 {studies.map(s => (
                   <option key={s.id} value={s.id}>{s.title.substring(0, 35)}...</option>
@@ -645,7 +909,9 @@
                 placeholder="Enter new study title..."
                 value={newCustomTitle}
                 onChange={(e) => setNewCustomTitle(e.target.value)}
-                class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 min-w-[200px]"
+                class={`flex-1 rounded-xl px-3 py-2 text-xs border focus:outline-none focus:border-blue-500 min-w-[200px] ${
+                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'
+                }`}
               />
 
               <button
@@ -658,9 +924,9 @@
           </div>
 
           {/* Processed Studies List */}
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
             <div class="flex items-center justify-between mb-4">
-              <h3 class="font-bold text-white text-sm">
+              <h3 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                 Processed Studies ({sortedStudies.length})
               </h3>
               <span class="text-xs text-slate-400">Arranged: Most Recent &rarr; Oldest</span>
@@ -668,7 +934,7 @@
 
             <div class="max-h-[600px] overflow-y-auto custom-scrollbar space-y-4 pr-1">
               {sortedStudies.map((study) => (
-                <div key={study.id} class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-4 space-y-3">
+                <div key={study.id} class={`p-4 rounded-xl border space-y-3 ${isDarkMode ? 'bg-slate-800/70 border-slate-700/70' : 'bg-slate-50 border-slate-200'}`}>
                   <div class="flex flex-wrap items-center justify-between gap-2">
                     <div class="flex items-center gap-2">
                       <span class={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -676,17 +942,17 @@
                       }`}>
                         {study.type === 'web' ? 'Web Link' : 'PDF File'}
                       </span>
-                      <h4 class="font-bold text-white text-sm">{study.title}</h4>
+                      <h4 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{study.title}</h4>
                     </div>
 
-                    <div class="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <div class={`flex items-center gap-2 p-1 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}>
                       <span class="text-[10px] text-slate-400 font-medium pl-1">Origin:</span>
                       <button
                         onClick={() => handleToggleOrigin(study.id, 'Local (Philippines)')}
                         class={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
                           study.origin === 'Local (Philippines)'
                             ? 'bg-emerald-600 text-white shadow'
-                            : 'bg-slate-800 text-slate-400 hover:text-white'
+                            : isDarkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-600'
                         }`}
                       >
                         Local (PH)
@@ -696,7 +962,7 @@
                         class={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
                           study.origin === 'Foreign (International)'
                             ? 'bg-purple-600 text-white shadow'
-                            : 'bg-slate-800 text-slate-400 hover:text-white'
+                            : isDarkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-600'
                         }`}
                       >
                         Foreign (Int'l)
@@ -704,16 +970,16 @@
                     </div>
                   </div>
 
-                  <div class="bg-slate-900 p-3.5 rounded-xl border border-slate-800 space-y-1">
+                  <div class={`p-3.5 rounded-xl border space-y-1 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
                     <div class="flex items-center justify-between">
-                      <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">
+                      <span class="text-[10px] font-bold text-blue-500 uppercase tracking-wider">
                         Accurate AI Summary (~250 Words):
                       </span>
-                      <span class="text-[10px] text-slate-500 font-mono">
+                      <span class="text-[10px] text-slate-400 font-mono">
                         {study.summary.split(/\s+/).length} words
                       </span>
                     </div>
-                    <p class="text-xs text-slate-300 leading-relaxed font-sans">{study.summary}</p>
+                    <p class={`text-xs leading-relaxed font-sans ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{study.summary}</p>
                   </div>
                 </div>
               ))}
@@ -724,22 +990,20 @@
     }
 
     // ==========================================
-    // 3. ANNOTATE & EVALUATE SECTION WITH HIGHLIGHTER (Amber Theme)
+    // 3. ANNOTATE & EVALUATE SECTION WITH HIGHLIGHTER
     // ==========================================
-    function AnnotateSection({ studies, setStudies }) {
+    function AnnotateSection({ studies, setStudies, isDarkMode }) {
       const [selectedStudyId, setSelectedStudyId] = useState(studies[0]?.id || '');
       const [newAnnoText, setNewAnnoText] = useState('');
       const [newAnnoType, setNewAnnoType] = useState('key_insight');
       const [newAnnoPage, setNewAnnoPage] = useState(1);
 
-      // PDF Viewer State
       const [pdfPageNum, setPdfPageNum] = useState(1);
       const [pdfTotalPages, setPdfTotalPages] = useState(1);
       const canvasRef = useRef(null);
 
-      // PDF Canvas Highlighter Tool State
       const [isHighlighterActive, setIsHighlighterActive] = useState(false);
-      const [highlightColor, setHighlightColor] = useState('#fef08a'); // Default Yellow
+      const [highlightColor, setHighlightColor] = useState('#fef08a');
       const [highlights, setHighlights] = useState([]);
       const [isDrawingHighlight, setIsDrawingHighlight] = useState(false);
       const [highlightStartPos, setHighlightStartPos] = useState(null);
@@ -747,13 +1011,12 @@
       const activeStudy = studies.find(s => s.id === selectedStudyId) || studies[0];
 
       const categoryStyles = {
-        key_insight: { label: 'Key Insight', bg: 'bg-emerald-950/80', text: 'text-emerald-300', border: 'border-emerald-700', badge: 'bg-emerald-600' },
-        critique: { label: 'Critique', bg: 'bg-rose-950/80', text: 'text-rose-300', border: 'border-rose-700', badge: 'bg-rose-600' },
-        recommendation: { label: 'Recommendation', bg: 'bg-amber-950/80', text: 'text-amber-300', border: 'border-amber-700', badge: 'bg-amber-600' },
-        limitations: { label: 'Limitations', bg: 'bg-purple-950/80', text: 'text-purple-300', border: 'border-purple-700', badge: 'bg-purple-600' }
+        key_insight: { label: 'Key Insight', bg: isDarkMode ? 'bg-emerald-950/80' : 'bg-emerald-50', text: isDarkMode ? 'text-emerald-300' : 'text-emerald-800', border: 'border-emerald-500', badge: 'bg-emerald-600' },
+        critique: { label: 'Critique', bg: isDarkMode ? 'bg-rose-950/80' : 'bg-rose-50', text: isDarkMode ? 'text-rose-300' : 'text-rose-800', border: 'border-rose-500', badge: 'bg-rose-600' },
+        recommendation: { label: 'Recommendation', bg: isDarkMode ? 'bg-amber-950/80' : 'bg-amber-50', text: isDarkMode ? 'text-amber-300' : 'text-amber-800', border: 'border-amber-500', badge: 'bg-amber-600' },
+        limitations: { label: 'Limitations', bg: isDarkMode ? 'bg-purple-950/80' : 'bg-purple-50', text: isDarkMode ? 'text-purple-300' : 'text-purple-800', border: 'border-purple-500', badge: 'bg-purple-600' }
       };
 
-      // Render PDF Page and Overlay Highlights onto Canvas
       useEffect(() => {
         if (!activeStudy || !activeStudy.pdfDataUri || !canvasRef.current) return;
 
@@ -777,7 +1040,6 @@
 
             await page.render({ canvasContext: context, viewport: viewport }).promise;
 
-            // Draw saved highlights onto PDF canvas
             context.save();
             highlights.filter(h => h.page === pdfPageNum).forEach(h => {
               context.fillStyle = h.color;
@@ -794,7 +1056,6 @@
         return () => { isCancelled = true; };
       }, [activeStudy, pdfPageNum, highlights]);
 
-      // Canvas Mouse Handlers for Drawing Highlighting Overlays
       const handleCanvasMouseDown = (e) => {
         if (!isHighlighterActive || !canvasRef.current) return;
         const rect = canvasRef.current.getBoundingClientRect();
@@ -862,30 +1123,28 @@
 
       return (
         <div class="space-y-6">
-          <div class="bg-amber-950/40 border border-amber-800/60 p-5 rounded-2xl">
-            <span class="px-2.5 py-1 bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+          <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-amber-950/40 border-amber-800/60' : 'bg-amber-50 border-amber-200'}`}>
+            <span class={`px-2.5 py-1 border rounded-full text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'bg-amber-600/30 text-amber-300 border-amber-500/30' : 'bg-amber-100 text-amber-800 border-amber-300'}`}>
               Section 3: Embedded Document Reader & PDF Canvas Highlighter
             </span>
-            <h2 class="text-xl font-bold text-white mt-1">Scroll Document, Highlight Passages & Tag Annotations</h2>
-            <p class="text-xs text-amber-200/80 mt-0.5">
+            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Scroll Document, Highlight Passages & Tag Annotations</h2>
+            <p class={`text-xs mt-0.5 ${isDarkMode ? 'text-amber-200/80' : 'text-amber-900/80'}`}>
               Use the PDF canvas highlighter tool to visually mark key findings while adding critical tags to your review matrix.
             </p>
           </div>
 
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Embedded PDF Viewer Panel */}
-            <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div class={`lg:col-span-7 p-4 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/50 pb-3">
                 <div class="flex items-center gap-2">
-                  <span class="font-bold text-white text-xs truncate max-w-xs">{activeStudy.title}</span>
-                  <span class="px-2 py-0.5 bg-amber-950 text-amber-300 border border-amber-700 rounded text-[10px]">
+                  <span class={`font-bold text-xs truncate max-w-xs ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeStudy.title}</span>
+                  <span class="px-2 py-0.5 bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded text-[10px]">
                     {activeStudy.origin}
                   </span>
                 </div>
 
-                {/* PDF Controls & Highlighter Toolbar */}
                 <div class="flex flex-wrap items-center gap-2">
-                  <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                  <div class={`flex items-center gap-1 p-1 rounded-lg border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-300'}`}>
                     <button
                       type="button"
                       onClick={() => setIsHighlighterActive(!isHighlighterActive)}
@@ -925,7 +1184,7 @@
                       >
                         &larr;
                       </button>
-                      <span class="text-xs font-mono text-slate-300">
+                      <span class="text-xs font-mono text-slate-400">
                         {pdfPageNum}/{pdfTotalPages}
                       </span>
                       <button
@@ -940,8 +1199,7 @@
                 </div>
               </div>
 
-              {/* PDF Display Canvas */}
-              <div class="bg-slate-950 rounded-xl p-2 border border-slate-800 min-h-[450px] flex items-center justify-center overflow-auto custom-scrollbar">
+              <div class={`rounded-xl p-2 border min-h-[450px] flex items-center justify-center overflow-auto custom-scrollbar ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
                 {activeStudy.pdfDataUri ? (
                   <canvas
                     ref={canvasRef}
@@ -952,7 +1210,7 @@
                 ) : (
                   <div class="p-6 text-center space-y-3 w-full">
                     <p class="text-slate-400 text-xs">Standard document text view ({activeStudy.type === 'web' ? 'Web Link' : 'Sample Study'}):</p>
-                    <div class="p-4 bg-slate-900 rounded-xl border border-slate-800 text-left text-xs text-slate-300 leading-relaxed max-h-80 overflow-y-auto">
+                    <div class={`p-4 rounded-xl border text-left text-xs leading-relaxed max-h-80 overflow-y-auto ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>
                       {activeStudy.extractedText || activeStudy.summary}
                     </div>
                   </div>
@@ -960,15 +1218,14 @@
               </div>
             </div>
 
-            {/* Annotation Panel */}
             <div class="lg:col-span-5 space-y-4">
-              <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex gap-2 overflow-x-auto">
+              <div class={`p-3 rounded-2xl border flex gap-2 overflow-x-auto ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
                 {studies.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => { setSelectedStudyId(s.id); setPdfPageNum(1); }}
                     class={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                      activeStudy.id === s.id ? 'bg-amber-600 text-white shadow' : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+                      activeStudy.id === s.id ? 'bg-amber-600 text-white shadow' : isDarkMode ? 'bg-slate-950 text-slate-400' : 'bg-slate-100 text-slate-600'
                     }`}
                   >
                     {s.title.substring(0, 20)}...
@@ -976,8 +1233,8 @@
                 ))}
               </div>
 
-              <form onSubmit={handleAddAnnotation} class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-                <h4 class="font-bold text-white text-xs uppercase tracking-wider">Add Critical Tag</h4>
+              <form onSubmit={handleAddAnnotation} class={`p-4 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <h4 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Add Critical Tag</h4>
 
                 <div class="grid grid-cols-2 gap-2">
                   {Object.entries(categoryStyles).map(([key, cfg]) => (
@@ -988,7 +1245,7 @@
                       class={`p-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2 ${
                         newAnnoType === key
                           ? `${cfg.bg} ${cfg.text} ${cfg.border} ring-2 ring-amber-500/40`
-                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                          : isDarkMode ? 'bg-slate-950 text-slate-400 border-slate-800' : 'bg-slate-50 text-slate-600 border-slate-200'
                       }`}
                     >
                       <span class={`w-2 h-2 rounded-full ${cfg.badge}`}></span>
@@ -1002,7 +1259,7 @@
                   placeholder="Enter specific statement or critique quote..."
                   value={newAnnoText}
                   onChange={(e) => setNewAnnoText(e.target.value)}
-                  class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-amber-500"
+                  class={`w-full rounded-xl p-3 text-xs border focus:outline-none focus:border-amber-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
                 ></textarea>
 
                 <div class="flex items-center gap-2">
@@ -1012,7 +1269,7 @@
                     min="1"
                     value={newAnnoPage}
                     onChange={(e) => setNewAnnoPage(e.target.value)}
-                    class="w-16 bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white text-center focus:outline-none focus:border-amber-500"
+                    class={`w-16 rounded-xl px-2 py-1.5 text-xs text-center border focus:outline-none focus:border-amber-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
                   />
                   <button
                     type="submit"
@@ -1023,8 +1280,8 @@
                 </div>
               </form>
 
-              <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-                <h4 class="font-bold text-white text-xs uppercase tracking-wider">
+              <div class={`p-4 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <h4 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                   Tagged Annotations ({activeStudy.annotations.length})
                 </h4>
 
@@ -1042,7 +1299,7 @@
                           </div>
                           <p class={style.text}>{ann.text}</p>
                         </div>
-                        <button onClick={() => handleDeleteAnnotation(ann.id)} class="text-slate-500 hover:text-rose-400 text-sm">&times;</button>
+                        <button onClick={() => handleDeleteAnnotation(ann.id)} class="text-slate-400 hover:text-rose-500 text-sm">&times;</button>
                       </div>
                     );
                   })}
@@ -1055,9 +1312,9 @@
     }
 
     // ==========================================
-    // 4. THEMATIC CLUSTERING SECTION (Emerald Theme)
+    // 4. THEMATIC CLUSTERING SECTION
     // ==========================================
-    function ClusterSection({ studies, userThemes, setUserThemes, themeAssignments, setThemeAssignments }) {
+    function ClusterSection({ studies, userThemes, setUserThemes, themeAssignments, setThemeAssignments, isDarkMode }) {
       const [newThemeInput, setNewThemeInput] = useState('');
 
       const handleAddTheme = (e) => {
@@ -1107,23 +1364,23 @@
 
       return (
         <div class="space-y-6">
-          <div class="bg-emerald-950/40 border border-emerald-800/60 p-5 rounded-2xl">
-            <span class="px-2.5 py-1 bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+          <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-emerald-950/40 border-emerald-800/60' : 'bg-emerald-50 border-emerald-200'}`}>
+            <span class={`px-2.5 py-1 border rounded-full text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'bg-emerald-600/30 text-emerald-300 border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border-emerald-300'}`}>
               Section 4: Student-Defined Thematic Clustering
             </span>
-            <h2 class="text-xl font-bold text-white mt-1">Input Custom Themes & Assign Tagged Statements</h2>
-            <p class="text-xs text-emerald-200/80 mt-0.5">
+            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Input Custom Themes & Assign Tagged Statements</h2>
+            <p class={`text-xs mt-0.5 ${isDarkMode ? 'text-emerald-200/80' : 'text-emerald-900/80'}`}>
               Create your synthesis matrix headings. Check off tagged annotations to group statements under your themes.
             </p>
           </div>
 
-          <form onSubmit={handleAddTheme} class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex gap-3">
+          <form onSubmit={handleAddTheme} class={`p-4 rounded-2xl border flex gap-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
             <input
               type="text"
               placeholder="Input custom theme heading (e.g., 'Digital Infrastructure Gaps in Local Higher Education')..."
               value={newThemeInput}
               onChange={(e) => setNewThemeInput(e.target.value)}
-              class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+              class={`flex-1 rounded-xl px-4 py-2.5 text-xs border focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
             />
             <button
               type="submit"
@@ -1137,28 +1394,28 @@
             {userThemes.map((theme) => {
               const assignedAnnIds = themeAssignments[theme.id] || [];
               return (
-                <div key={theme.id} class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-                  <div class="flex items-center justify-between gap-2 border-b border-slate-800 pb-3">
-                    <h3 class="font-bold text-white text-sm text-emerald-400 flex items-center gap-2">
+                <div key={theme.id} class={`p-5 rounded-2xl border space-y-4 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                  <div class="flex items-center justify-between gap-2 border-b border-slate-700/50 pb-3">
+                    <h3 class="font-bold text-sm text-emerald-500 flex items-center gap-2">
                       <span>{theme.title}</span>
-                      <span class="px-2 py-0.5 bg-emerald-950 text-emerald-300 rounded-full text-[10px] border border-emerald-800 font-mono">
+                      <span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-500 rounded-full text-[10px] border border-emerald-500/30 font-mono">
                         {assignedAnnIds.length} items
                       </span>
                     </h3>
                     <button
                       onClick={() => handleDeleteTheme(theme.id)}
-                      class="text-xs text-slate-500 hover:text-rose-400 transition-colors"
+                      class="text-xs text-slate-400 hover:text-rose-500 transition-colors"
                     >
                       Remove
                     </button>
                   </div>
 
                   <div class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar pr-1">
-                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                       Assign Tagged Statements to Theme:
                     </span>
                     {allAnnotations.length === 0 ? (
-                      <p class="text-[11px] text-slate-500 py-2">Add annotations in Section 3 first.</p>
+                      <p class="text-[11px] text-slate-400 py-2">Add annotations in Section 3 first.</p>
                     ) : (
                       allAnnotations.map((ann) => {
                         const isAssigned = assignedAnnIds.includes(ann.id);
@@ -1167,19 +1424,19 @@
                             key={ann.id}
                             class={`p-2.5 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
                               isAssigned
-                                ? 'bg-emerald-950/40 border-emerald-600/80 text-emerald-200'
-                                : 'bg-slate-950/60 border-slate-800/80 text-slate-400 hover:border-slate-700'
+                                ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-700 dark:text-emerald-300'
+                                : isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
                             }`}
                           >
                             <input
                               type="checkbox"
                               checked={isAssigned}
                               onChange={() => toggleAnnotationInTheme(theme.id, ann.id)}
-                              class="mt-1 rounded border-slate-700 text-emerald-600 focus:ring-emerald-500 bg-slate-900"
+                              class="mt-1 rounded border-slate-700 text-emerald-600 focus:ring-emerald-500"
                             />
                             <div class="space-y-0.5 text-xs">
                               <p class="font-medium">{ann.text}</p>
-                              <div class="text-[10px] text-slate-500 flex items-center gap-2">
+                              <div class="text-[10px] text-slate-400 flex items-center gap-2">
                                 <span>{ann.studyTitle}</span>
                                 <span>&bull;</span>
                                 <span class="capitalize">{ann.type.replace('_', ' ')}</span>
@@ -1199,7 +1456,7 @@
     }
 
     // ==========================================
-    // 5. SYNTHESIS & AI COACH WITH DETAILED RUBRIC & PRINT EXPORT (Indigo Theme)
+    // 5. SYNTHESIS, AI COACH & SUBMISSION
     // ==========================================
     function SynthesisSection({
       studies,
@@ -1211,12 +1468,15 @@
       setSynthesisText,
       apiKey,
       rubricScores,
-      setRubricScores
+      setRubricScores,
+      submissionStatus,
+      setSubmissionStatus,
+      teacherFeedback,
+      isDarkMode
     }) {
       const [aiFeedback, setAiFeedback] = useState([]);
       const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-      // Detailed Criteria Level Descriptors
       const criteriaDescriptors = {
         thematicIntegration: {
           title: "1. Thematic Integration & Evidence Alignment",
@@ -1336,13 +1596,13 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
 
       return (
         <div class="space-y-6 print-container">
-          <div class="bg-indigo-950/40 border border-indigo-800/60 p-5 rounded-2xl no-print">
-            <span class="px-2.5 py-1 bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
-              Section 5: Synthesis Drafting, AI Coach & Printable PDF Export
+          <div class={`p-5 rounded-2xl border no-print ${isDarkMode ? 'bg-indigo-950/40 border-indigo-800/60' : 'bg-indigo-50 border-indigo-200'}`}>
+            <span class={`px-2.5 py-1 border rounded-full text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/30' : 'bg-indigo-100 text-indigo-800 border-indigo-300'}`}>
+              Section 5: Synthesis Drafting, AI Coach & Submission
             </span>
-            <h2 class="text-xl font-bold text-white mt-1">Write Synthesis, Self-Evaluate & Export Printable PDF</h2>
-            <p class="text-xs text-indigo-200/80 mt-0.5">
-              Draft your synthesis narrative, review detailed rubric criteria levels, and transform your work into an executive printable PDF document.
+            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Write Synthesis, Self-Evaluate & Submit for Teacher Feedback</h2>
+            <p class={`text-xs mt-0.5 ${isDarkMode ? 'text-indigo-200/80' : 'text-indigo-900/80'}`}>
+              Draft your synthesis narrative, review rubric criteria levels, run AI coaching scans, and submit your work directly to your teacher.
             </p>
           </div>
 
@@ -1355,8 +1615,8 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
 
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div class="lg:col-span-5 space-y-4">
-              <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 print-card">
-                <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-wider print-text">
+              <div class={`p-4 rounded-2xl border space-y-3 print-card ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <h3 class="text-xs font-bold text-indigo-500 uppercase tracking-wider print-text">
                   Active Clustered Themes Matrix ({userThemes.length})
                 </h3>
 
@@ -1364,19 +1624,19 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
                   {userThemes.map((theme) => {
                     const taggedItems = getAssignedAnnotationsForTheme(theme.id);
                     return (
-                      <div key={theme.id} class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2 print-card">
-                        <h4 class="font-bold text-xs text-emerald-300 print-text">{theme.title}</h4>
+                      <div key={theme.id} class={`p-3.5 rounded-xl border space-y-2 print-card ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <h4 class="font-bold text-xs text-emerald-500 print-text">{theme.title}</h4>
                         
                         <div class="space-y-1.5 pt-1">
                           {taggedItems.length === 0 ? (
-                            <p class="text-[10px] text-slate-500 italic">No tagged statements assigned to this theme.</p>
+                            <p class="text-[10px] text-slate-400 italic">No tagged statements assigned to this theme.</p>
                           ) : (
                             taggedItems.map((item) => (
-                              <div key={item.id} class="bg-slate-900/90 p-2 rounded-lg border border-slate-800 text-[11px] space-y-1 print-card">
-                                <p class="text-slate-300 print-text">"{item.text}"</p>
-                                <div class="flex items-center justify-between text-[9px] text-slate-500">
+                              <div key={item.id} class={`p-2 rounded-lg border text-[11px] space-y-1 print-card ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                                <p class={`print-text ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>"{item.text}"</p>
+                                <div class="flex items-center justify-between text-[9px] text-slate-400">
                                   <span>{item.studyTitle}</span>
-                                  <span class="text-amber-400">Pg. {item.page}</span>
+                                  <span class="text-amber-500">Pg. {item.page}</span>
                                 </div>
                               </div>
                             ))
@@ -1390,13 +1650,15 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
             </div>
 
             <div class="lg:col-span-7 space-y-5">
-              <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 print-card">
+              <div class={`p-5 rounded-2xl border space-y-4 print-card ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
                 <input
                   type="text"
                   placeholder="Synthesis Title..."
                   value={synthesisTitle}
                   onChange={(e) => setSynthesisTitle(e.target.value)}
-                  class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-indigo-500 print-text"
+                  class={`w-full rounded-xl px-4 py-2.5 text-sm font-bold border focus:outline-none focus:border-indigo-500 print-text ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                  }`}
                 />
 
                 <textarea
@@ -1404,37 +1666,64 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
                   placeholder="Draft your synthesis narrative here... Synthesize findings across local and foreign literature using your active clusters..."
                   value={synthesisText}
                   onChange={(e) => setSynthesisText(e.target.value)}
-                  class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 leading-relaxed font-sans print-text"
+                  class={`w-full rounded-xl p-4 text-xs border focus:outline-none focus:border-indigo-500 leading-relaxed font-sans print-text ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'
+                  }`}
                 ></textarea>
 
-                <div class="flex items-center justify-between no-print">
-                  <button
-                    type="button"
-                    onClick={handleRunAiCoach}
-                    disabled={isAnalyzing}
-                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
-                  >
-                    {isAnalyzing ? 'Scanning Draft...' : 'Run AI Writing Coach'}
-                  </button>
+                <div class="flex flex-wrap items-center justify-between gap-2 no-print">
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRunAiCoach}
+                      disabled={isAnalyzing}
+                      class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
+                    >
+                      {isAnalyzing ? 'Scanning Draft...' : 'Run AI Writing Coach'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSubmissionStatus('submitted')}
+                      class={`px-4 py-2 font-semibold text-xs rounded-xl shadow transition-all ${
+                        submissionStatus === 'submitted'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-purple-600 hover:bg-purple-500 text-white'
+                      }`}
+                    >
+                      {submissionStatus === 'submitted' ? 'Submitted to Teacher' : 'Submit to Teacher'}
+                    </button>
+                  </div>
 
                   <button
                     type="button"
                     onClick={() => window.print()}
                     class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow transition-all flex items-center gap-2"
                   >
-                    <span>Printable PDF Output</span>
+                    <span>Printable PDF</span>
                     <span>&darr;</span>
                   </button>
                 </div>
               </div>
 
+              {/* Teacher Reviewed Feedback Display */}
+              {teacherFeedback.comments && (
+                <div class={`p-5 rounded-2xl border space-y-2 no-print ${isDarkMode ? 'bg-purple-950/40 border-purple-800' : 'bg-purple-50 border-purple-200'}`}>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-purple-500 uppercase tracking-wider">Teacher Review & Feedback</span>
+                    <span class="text-xs font-mono font-bold text-purple-400">Grade: {teacherFeedback.grade || 'A'}</span>
+                  </div>
+                  <p class={`text-xs leading-relaxed ${isDarkMode ? 'text-purple-200' : 'text-purple-900'}`}>"{teacherFeedback.comments}"</p>
+                </div>
+              )}
+
               {aiFeedback.length > 0 && (
-                <div class="bg-indigo-950/50 border border-indigo-800 rounded-2xl p-5 space-y-3 no-print">
-                  <h4 class="font-bold text-white text-xs uppercase tracking-wider">AI Writing Coach Feedback</h4>
+                <div class={`p-5 rounded-2xl border space-y-3 no-print ${isDarkMode ? 'bg-indigo-950/50 border-indigo-800' : 'bg-indigo-50 border-indigo-200'}`}>
+                  <h4 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>AI Writing Coach Feedback</h4>
                   <div class="space-y-2">
                     {aiFeedback.map((fb, idx) => (
-                      <div key={idx} class="bg-slate-900/90 p-3 rounded-xl border border-indigo-900/80 text-xs text-indigo-200 space-y-1">
-                        <span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-900 text-indigo-300">
+                      <div key={idx} class={`p-3 rounded-xl border text-xs space-y-1 ${isDarkMode ? 'bg-slate-900/90 border-indigo-900/80 text-indigo-200' : 'bg-white border-indigo-200 text-indigo-900'}`}>
+                        <span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-600 text-white">
                           {fb.type}
                         </span>
                         <p>{fb.suggestion}</p>
@@ -1445,8 +1734,8 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
               )}
 
               {/* Student Self-Evaluation Rubric */}
-              <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 print-card">
-                <h4 class="font-bold text-white text-xs uppercase tracking-wider print-text">
+              <div class={`p-5 rounded-2xl border space-y-4 print-card ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <h4 class={`font-bold text-xs uppercase tracking-wider print-text ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                   Detailed Student Self-Evaluation Rubric
                 </h4>
 
@@ -1454,13 +1743,15 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
                   {Object.entries(criteriaDescriptors).map(([key, item]) => {
                     const currentScore = rubricScores[key];
                     return (
-                      <div key={key} class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 print-card">
+                      <div key={key} class={`p-4 rounded-xl border space-y-2 print-card ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                         <div class="flex justify-between items-center">
-                          <span class="font-semibold text-slate-200 print-text">{item.title}</span>
-                          <span class="text-indigo-400 font-mono font-bold">{currentScore}/4</span>
+                          <span class={`font-semibold print-text ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{item.title}</span>
+                          <span class="text-indigo-500 font-mono font-bold">{currentScore}/4</span>
                         </div>
 
-                        <p class="text-[11px] text-indigo-200/90 bg-indigo-950/50 p-2 rounded border border-indigo-900/60 leading-relaxed print-text">
+                        <p class={`text-[11px] p-2 rounded border leading-relaxed print-text ${
+                          isDarkMode ? 'bg-indigo-950/50 border-indigo-900/60 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-900'
+                        }`}>
                           {item.levels[currentScore]}
                         </p>
 
@@ -1472,7 +1763,7 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
                               class={`flex-1 py-1 rounded text-[11px] font-bold border transition-all ${
                                 currentScore === score
                                   ? 'bg-indigo-600 text-white border-indigo-500'
-                                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                                  : isDarkMode ? 'bg-slate-900 text-slate-400 border-slate-800' : 'bg-white text-slate-600 border-slate-300'
                               }`}
                             >
                               Level {score}
@@ -1484,11 +1775,206 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
                   })}
                 </div>
 
-                <div class="p-3 bg-emerald-950/60 border border-emerald-800/80 rounded-xl flex items-center justify-between text-xs text-emerald-300 print-card">
+                <div class={`p-3 rounded-xl border flex items-center justify-between text-xs print-card ${
+                  isDarkMode ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}>
                   <span class="print-text">Self-Evaluation Total Score:</span>
                   <span class="font-bold text-sm font-mono print-text">
                     {Object.values(rubricScores).reduce((a, b) => a + b, 0)} / 16 Points
                   </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 6. TEACHER FEEDBACK PORTAL
+    // ==========================================
+    function TeacherFeedbackPortal({
+      studies,
+      userThemes,
+      themeAssignments,
+      synthesisTitle,
+      synthesisText,
+      rubricScores,
+      submissionStatus,
+      setSubmissionStatus,
+      teacherFeedback,
+      setTeacherFeedback,
+      userName,
+      isDarkMode
+    }) {
+      const [diagnosticFlags, setDiagnosticFlags] = useState([]);
+      const [teacherGradeInput, setTeacherGradeInput] = useState(teacherFeedback.grade || 'A');
+      const [teacherCommentInput, setTeacherCommentInput] = useState(teacherFeedback.comments || '');
+
+      // Sentence-Level Diagnostic Flagging Engine
+      const handleRunDiagnosticScan = () => {
+        if (!synthesisText.trim()) return;
+
+        const sentences = synthesisText.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 10);
+        const flags = [];
+
+        sentences.forEach((sentence, idx) => {
+          if (!sentence.includes('(') && !sentence.includes(')')) {
+            flags.push({
+              id: 'flag-' + idx,
+              sentence,
+              type: 'Missing Citation',
+              severity: 'warning',
+              suggestion: 'Add in-text parenthetical author attribution for empirical claims.'
+            });
+          }
+          if (/\b(I|me|my|we|us|our)\b/i.test(sentence)) {
+            flags.push({
+              id: 'flag-tone-' + idx,
+              sentence,
+              type: 'Informal Tone',
+              severity: 'critical',
+              suggestion: 'Avoid first-person pronouns. Maintain objective scholarly voice.'
+            });
+          }
+        });
+
+        setDiagnosticFlags(flags);
+      };
+
+      const handleSaveTeacherFeedback = (e) => {
+        e.preventDefault();
+        setTeacherFeedback({
+          grade: teacherGradeInput,
+          comments: teacherCommentInput,
+          reviewedAt: Date.now()
+        });
+        setSubmissionStatus('reviewed');
+      };
+
+      return (
+        <div class="space-y-6">
+          <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-purple-950/40 border-purple-800/60' : 'bg-purple-50 border-purple-200'}`}>
+            <span class={`px-2.5 py-1 border rounded-full text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'bg-purple-600/30 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-300'}`}>
+              Section 6: Teacher Evaluation & Live Diagnostic Feedback Portal
+            </span>
+            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Instructor Assessment & Sentence Diagnostic Flagging</h2>
+            <p class={`text-xs mt-0.5 ${isDarkMode ? 'text-purple-200/80' : 'text-purple-900/80'}`}>
+              Review submitted student literature syntheses, inspect sentence-level diagnostic flags, and assign feedback grades.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Student Submission Summary & Diagnostic Controls */}
+            <div class="lg:col-span-7 space-y-5">
+              <div class={`p-5 rounded-2xl border space-y-4 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div class="flex items-center justify-between border-b pb-3 border-slate-700/50">
+                  <div>
+                    <h3 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{synthesisTitle || 'Untitled Synthesis'}</h3>
+                    <p class="text-xs text-slate-400">Student: {userName} &bull; Status: <strong class="text-purple-400 capitalize">{submissionStatus}</strong></p>
+                  </div>
+                  <button
+                    onClick={handleRunDiagnosticScan}
+                    class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
+                  >
+                    Run Sentence Diagnostics
+                  </button>
+                </div>
+
+                <div class={`p-4 rounded-xl border text-xs leading-relaxed max-h-80 overflow-y-auto ${
+                  isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'
+                }`}>
+                  {synthesisText || 'No synthesis narrative submitted yet.'}
+                </div>
+              </div>
+
+              {/* Diagnostic Flags List */}
+              {diagnosticFlags.length > 0 && (
+                <div class={`p-5 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                  <h4 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    Sentence-Level Diagnostic Flags ({diagnosticFlags.length})
+                  </h4>
+
+                  <div class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                    {diagnosticFlags.map((flag) => (
+                      <div key={flag.id} class={`p-3 rounded-xl border text-xs space-y-1 ${
+                        flag.severity === 'critical'
+                          ? isDarkMode ? 'bg-rose-950/50 border-rose-800 text-rose-200' : 'bg-rose-50 border-rose-200 text-rose-900'
+                          : isDarkMode ? 'bg-amber-950/50 border-amber-800 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-900'
+                      }`}>
+                        <div class="flex justify-between items-center font-bold">
+                          <span>Flag: {flag.type}</span>
+                          <span class="text-[9px] uppercase px-2 py-0.5 rounded bg-slate-800 text-white">{flag.severity}</span>
+                        </div>
+                        <p class="italic">"{flag.sentence}"</p>
+                        <p class="text-[11px] font-semibold">&rarr; {flag.suggestion}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Teacher Feedback Entry Form */}
+            <div class="lg:col-span-5 space-y-5">
+              <form onSubmit={handleSaveTeacherFeedback} class={`p-5 rounded-2xl border space-y-4 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <h4 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                  Teacher Evaluation Form
+                </h4>
+
+                <div class="space-y-2 text-xs">
+                  <label class="block text-slate-400 font-medium">Assigned Grade / Performance Level:</label>
+                  <select
+                    value={teacherGradeInput}
+                    onChange={(e) => setTeacherGradeInput(e.target.value)}
+                    class={`w-full rounded-xl p-2.5 text-xs border focus:outline-none focus:border-purple-500 ${
+                      isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'
+                    }`}
+                  >
+                    <option value="A (Exemplary)">A (Exemplary 15-16 pts)</option>
+                    <option value="B (Proficient)">B (Proficient 12-14 pts)</option>
+                    <option value="C (Developing)">C (Developing 9-11 pts)</option>
+                    <option value="D (Needs Revision)">D (Needs Revision &lt;9 pts)</option>
+                  </select>
+                </div>
+
+                <div class="space-y-2 text-xs">
+                  <label class="block text-slate-400 font-medium">Detailed Instructor Commentary:</label>
+                  <textarea
+                    rows="6"
+                    placeholder="Provide specific feedback on thematic integration, citation accuracy, and empirical synthesis..."
+                    value={teacherCommentInput}
+                    onChange={(e) => setTeacherCommentInput(e.target.value)}
+                    class={`w-full rounded-xl p-3 text-xs border focus:outline-none focus:border-purple-500 ${
+                      isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'
+                    }`}
+                  ></textarea>
+                </div>
+
+                <button
+                  type="submit"
+                  class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
+                >
+                  Save & Publish Feedback to Student
+                </button>
+              </form>
+
+              {/* Student Self-Evaluation Score Matrix Reference */}
+              <div class={`p-4 rounded-2xl border text-xs space-y-2 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <span class="font-bold text-slate-400 uppercase tracking-wider block">Student Self-Evaluation Matrix:</span>
+                <div class="grid grid-cols-2 gap-2 font-mono">
+                  <div class={`p-2 rounded border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                    Integration: {rubricScores.thematicIntegration}/4
+                  </div>
+                  <div class={`p-2 rounded border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                    Synthesis: {rubricScores.criticalSynthesis}/4
+                  </div>
+                  <div class={`p-2 rounded border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                    Tone/Style: {rubricScores.academicTone}/4
+                  </div>
+                  <div class={`p-2 rounded border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                    Citations: {rubricScores.citationAccuracy}/4
+                  </div>
                 </div>
               </div>
             </div>
