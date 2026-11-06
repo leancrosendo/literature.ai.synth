@@ -391,12 +391,20 @@
                   5. Synthesis & Rubric
                 </button>
                 <button
+                  onClick={() => setActiveTab('padlet')}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                    activeTab === 'padlet' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  6. Peer Discussion Padlet
+                </button>
+                <button
                   onClick={() => setActiveTab('teacher')}
                   class={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                     activeTab === 'teacher' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  6. Teacher Feedback Portal
+                  7. Teacher Feedback Portal
                 </button>
               </nav>
 
@@ -505,6 +513,15 @@
                 submissionStatus={submissionStatus}
                 setSubmissionStatus={setSubmissionStatus}
                 teacherFeedback={teacherFeedback}
+                isDarkMode={isDarkMode}
+              />
+            )}
+
+            {activeTab === 'padlet' && (
+              <PeerPadletSection
+                synthesisTitle={synthesisTitle}
+                synthesisText={synthesisText}
+                userName={userName}
                 isDarkMode={isDarkMode}
               />
             )}
@@ -1791,7 +1808,288 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
     }
 
     // ==========================================
-    // 6. TEACHER FEEDBACK PORTAL
+    // 6. PEER DISCUSSION PADLET BOARD SECTION
+    // ==========================================
+    function PeerPadletSection({ synthesisTitle, synthesisText, userName, isDarkMode }) {
+      const [padletPosts, setPadletPosts] = useState([
+        {
+          id: 'post-1',
+          author: 'Maria Clara',
+          title: 'Synthesis of Local Digital Infrastructure & Blended Learning',
+          content: 'This review synthesizes 4 studies examining regional internet access gaps across Philippine provinces. The evidence demonstrates that scaffolded offline modules significantly mitigate student task anxiety during online synthesis.',
+          evaluation: 'Satisfactory',
+          rubricFeedback: {
+            evidence: 'Satisfactory',
+            integration: 'Satisfactory',
+            critiqueQuality: 'Satisfactory'
+          },
+          likes: 5,
+          comments: [
+            { id: 'c-1', author: 'Juan Dela Cruz', text: 'Great alignment between local context and foreign literature! Consider adding specific methodology details from Santos (2024).' }
+          ]
+        },
+        {
+          id: 'post-2',
+          author: 'Alex Mercado',
+          title: 'Gamification Mechanics in Literature Reviews',
+          content: 'Exploring how badge mechanics increase task completion rates by 42% in sophomore research methods.',
+          evaluation: 'Needs Improvement',
+          rubricFeedback: {
+            evidence: 'Needs Improvement',
+            integration: 'Satisfactory',
+            critiqueQuality: 'Needs Improvement'
+          },
+          likes: 2,
+          comments: [
+            { id: 'c-2', author: 'Maria Clara', text: 'The thesis is interesting, but you need in-text parenthetical citations to support your claims on gamification efficacy.' }
+          ]
+        }
+      ]);
+
+      const [newPostTitle, setNewPostTitle] = useState(synthesisTitle || '');
+      const [newPostContent, setNewPostContent] = useState(synthesisText || '');
+      const [newPostEval, setNewPostEval] = useState('Satisfactory');
+      const [commentInputs, setCommentInputs] = useState({});
+
+      const peerRubricDescriptors = {
+        evidence: {
+          label: '1. Evidence Grounding & Citation Integrity',
+          satisfactory: 'Satisfactory: All empirical claims are backed by clear parenthetical citations and source studies.',
+          needsImprovement: 'Needs Improvement: Uncited generalizations or missing parenthetical citations.'
+        },
+        integration: {
+          label: '2. Thematic Synthesis & Comparison',
+          satisfactory: 'Satisfactory: Smoothly synthesizes local and foreign studies under cohesive thematic headings.',
+          needsImprovement: 'Needs Improvement: Lists paper summaries independently without comparing methodologies or findings.'
+        },
+        critiqueQuality: {
+          label: '3. Constructive Academic Critique',
+          satisfactory: 'Satisfactory: Offers respectful, highly specific recommendations for literature review refinement.',
+          needsImprovement: 'Needs Improvement: Vague feedback lacking actionable research suggestions.'
+        }
+      };
+
+      const handlePublishPost = (e) => {
+        e.preventDefault();
+        if (!newPostContent.trim()) return;
+
+        const newPost = {
+          id: 'post-' + Date.now(),
+          author: userName || 'Student Researcher',
+          title: newPostTitle || 'Research Literature Review Synthesis',
+          content: newPostContent.trim(),
+          evaluation: newPostEval,
+          rubricFeedback: {
+            evidence: newPostEval,
+            integration: newPostEval,
+            critiqueQuality: newPostEval
+          },
+          likes: 0,
+          comments: []
+        };
+
+        setPadletPosts([newPost, ...padletPosts]);
+        setNewPostTitle('');
+        setNewPostContent('');
+      };
+
+      const handleAddComment = (postId) => {
+        const text = commentInputs[postId];
+        if (!text || !text.trim()) return;
+
+        setPadletPosts(padletPosts.map(post => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              comments: [...post.comments, { id: 'c-' + Date.now(), author: userName, text: text.trim() }]
+            };
+          }
+          return post;
+        }));
+
+        setCommentInputs({ ...commentInputs, [postId]: '' });
+      };
+
+      const handleLikePost = (postId) => {
+        setPadletPosts(padletPosts.map(post => {
+          if (post.id === postId) {
+            return { ...post, likes: post.likes + 1 };
+          }
+          return post;
+        }));
+      };
+
+      return (
+        <div class="space-y-6">
+          <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-pink-950/40 border-pink-800/60' : 'bg-pink-50 border-pink-200'}`}>
+            <span class={`px-2.5 py-1 border rounded-full text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'bg-pink-600/30 text-pink-300 border-pink-500/30' : 'bg-pink-100 text-pink-800 border-pink-300'}`}>
+              Section 6: Peer Critique Padlet Discussion Board
+            </span>
+            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Collaborative Peer Review & Critique Padlet</h2>
+            <p class={`text-xs mt-0.5 ${isDarkMode ? 'text-pink-200/80' : 'text-pink-900/80'}`}>
+              Publish your literature synthesis draft to the interactive board, review peer submissions, and evaluate peer work using the Satisfactory vs. Needs Improvement rubric.
+            </p>
+          </div>
+
+          {/* Peer Critique Rubric Overview Header */}
+          <div class={`p-5 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <h3 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+              Detailed Peer Critique Criteria (Satisfactory vs. Needs Improvement)
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              {Object.entries(peerRubricDescriptors).map(([key, desc]) => (
+                <div key={key} class={`p-3 rounded-xl border space-y-1 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                  <span class="font-bold text-pink-500 block text-[11px]">{desc.label}</span>
+                  <p class="text-emerald-500 font-medium text-[10px]">&check; {desc.satisfactory}</p>
+                  <p class="text-amber-500 font-medium text-[10px]">&excl; {desc.needsImprovement}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* New Post / Share Draft Area */}
+          <form onSubmit={handlePublishPost} class={`p-5 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <h3 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Post Your Synthesis to the Peer Padlet</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                type="text"
+                placeholder="Post / Synthesis Title..."
+                value={newPostTitle}
+                onChange={(e) => setNewPostTitle(e.target.value)}
+                class={`rounded-xl px-3 py-2 text-xs border focus:outline-none focus:border-pink-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
+              />
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">Self Rating:</span>
+                <button
+                  type="button"
+                  onClick={() => setNewPostEval('Satisfactory')}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    newPostEval === 'Satisfactory' ? 'bg-emerald-600 text-white shadow' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  Satisfactory
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewPostEval('Needs Improvement')}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    newPostEval === 'Needs Improvement' ? 'bg-amber-600 text-white shadow' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  Needs Improvement
+                </button>
+              </div>
+            </div>
+
+            <textarea
+              rows="3"
+              placeholder="Paste your synthesis text or summary to receive peer feedback..."
+              value={newPostContent}
+              onChange={(e) => setNewPostContent(e.target.value)}
+              class={`w-full rounded-xl p-3 text-xs border focus:outline-none focus:border-pink-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
+            ></textarea>
+
+            <button
+              type="submit"
+              class="px-5 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
+            >
+              + Publish Card to Padlet Board
+            </button>
+          </form>
+
+          {/* Interactive Padlet Board Cards Grid */}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {padletPosts.map((post) => (
+              <div key={post.id} class={`p-5 rounded-2xl border space-y-4 flex flex-col justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between border-b pb-2 border-slate-700/50">
+                    <div>
+                      <h4 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{post.title}</h4>
+                      <p class="text-[10px] text-slate-400">Author: {post.author}</p>
+                    </div>
+                    <span class={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                      post.evaluation === 'Satisfactory'
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                        : 'bg-amber-950 text-amber-300 border border-amber-700'
+                    }`}>
+                      {post.evaluation}
+                    </span>
+                  </div>
+
+                  <p class={`text-xs leading-relaxed font-sans ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>"{post.content}"</p>
+
+                  {/* Peer Rubric Assessment Badge Bar */}
+                  <div class={`p-2.5 rounded-xl border text-[10px] grid grid-cols-3 gap-1 text-center ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <div>
+                      <span class="text-slate-400 block">Evidence</span>
+                      <strong class={post.rubricFeedback?.evidence === 'Satisfactory' ? 'text-emerald-400' : 'text-amber-400'}>
+                        {post.rubricFeedback?.evidence}
+                      </strong>
+                    </div>
+                    <div>
+                      <span class="text-slate-400 block">Integration</span>
+                      <strong class={post.rubricFeedback?.integration === 'Satisfactory' ? 'text-emerald-400' : 'text-amber-400'}>
+                        {post.rubricFeedback?.integration}
+                      </strong>
+                    </div>
+                    <div>
+                      <span class="text-slate-400 block">Critique Quality</span>
+                      <strong class={post.rubricFeedback?.critiqueQuality === 'Satisfactory' ? 'text-emerald-400' : 'text-amber-400'}>
+                        {post.rubricFeedback?.critiqueQuality}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Comment & Like Action Toolbar */}
+                <div class="pt-3 border-t border-slate-700/50 space-y-3">
+                  <div class="flex items-center justify-between text-xs">
+                    <button
+                      onClick={() => handleLikePost(post.id)}
+                      class="flex items-center gap-1.5 text-pink-500 font-bold hover:text-pink-400 transition-colors"
+                    >
+                      <span>&hearts;</span>
+                      <span>{post.likes} Helpful Critiques</span>
+                    </button>
+                    <span class="text-slate-400 text-[10px]">{post.comments.length} Comments</span>
+                  </div>
+
+                  {/* Comments Thread */}
+                  <div class="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar">
+                    {post.comments.map(c => (
+                      <div key={c.id} class={`p-2 rounded-lg text-[11px] space-y-0.5 ${isDarkMode ? 'bg-slate-950/80 border border-slate-800 text-slate-300' : 'bg-slate-100 border border-slate-200 text-slate-700'}`}>
+                        <strong class="text-pink-400 block text-[10px]">{c.author}:</strong>
+                        <p>{c.text}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Leave Critique Input Form */}
+                  <div class="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Add constructive peer critique..."
+                      value={commentInputs[post.id] || ''}
+                      onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
+                      class={`flex-1 rounded-xl px-3 py-1.5 text-xs border focus:outline-none focus:border-pink-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
+                    />
+                    <button
+                      onClick={() => handleAddComment(post.id)}
+                      class="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-white font-semibold text-xs rounded-xl shadow transition-all shrink-0"
+                    >
+                      Critique
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 7. TEACHER FEEDBACK PORTAL
     // ==========================================
     function TeacherFeedbackPortal({
       studies,
