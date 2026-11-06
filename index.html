@@ -433,12 +433,20 @@
                   6. Peer Padlet
                 </button>
                 <button
+                  onClick={() => setActiveTab('feedback-hub')}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                    activeTab === 'feedback-hub' ? 'bg-teal-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  7. Feedback Summary Hub
+                </button>
+                <button
                   onClick={() => setActiveTab('teacher')}
                   class={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                     activeTab === 'teacher' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  7. Teacher Portal
+                  8. Teacher Portal
                 </button>
               </nav>
 
@@ -688,6 +696,17 @@
                 synthesisTitle={synthesisTitle}
                 synthesisText={synthesisText}
                 isDarkMode={isDarkMode}
+              />
+            )}
+
+            {activeTab === 'feedback-hub' && (
+              <FeedbackSummarySection
+                synthesisTitle={synthesisTitle}
+                synthesisText={synthesisText}
+                teacherFeedback={teacherFeedback}
+                rubricScores={rubricScores}
+                isDarkMode={isDarkMode}
+                setActiveTab={setActiveTab}
               />
             )}
 
@@ -2288,6 +2307,144 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 6.5 FEEDBACK SUMMARY & EVALUATION HUB SECTION
+    // ==========================================
+    function FeedbackSummarySection({ synthesisTitle, synthesisText, teacherFeedback, rubricScores, isDarkMode, setActiveTab }) {
+      const teacherGrade = teacherFeedback?.grade || 'Not Graded Yet';
+      const teacherComments = teacherFeedback?.comments || 'No official qualitative comments recorded yet by instructor.';
+
+      return (
+        <div class="space-y-6">
+          <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-teal-950/40 border-teal-800/60' : 'bg-teal-50 border-teal-200'}`}>
+            <span class={`px-2.5 py-1 border rounded-full text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'bg-teal-600/30 text-teal-300 border-teal-500/30' : 'bg-teal-100 text-teal-800 border-teal-300'}`}>
+              Section 7: Multi-Source Feedback & Evaluation Hub
+            </span>
+            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Integrated Feedback Dashboard</h2>
+            <p class={`text-xs mt-0.5 ${isDarkMode ? 'text-teal-200/80' : 'text-teal-900/80'}`}>
+              Comprehensive consolidation of Teacher Evaluation, AI Writing Diagnostics, and Peer Review Ratings to guide final literature synthesis revisions.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* 1. Teacher Evaluation Summary Card */}
+            <div class={`p-5 rounded-2xl border space-y-3 flex flex-col justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div class="space-y-2">
+                <div class="flex items-center justify-between border-b pb-2 border-slate-700/50">
+                  <span class="text-xs font-bold text-purple-400 uppercase tracking-wider">1. Teacher Assessment</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950 text-purple-300 border border-purple-700">
+                    Grade: {teacherGrade}
+                  </span>
+                </div>
+                <h4 class={`text-xs font-semibold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Instructor Diagnostic Feedback</h4>
+                <p class={`text-xs leading-relaxed italic ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                  "{teacherComments}"
+                </p>
+              </div>
+
+              <div class={`p-3 rounded-xl border text-[11px] space-y-1 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                <div class="flex justify-between">
+                  <span>Self-Rubric Total:</span>
+                  <span class="font-bold text-teal-400">{Object.values(rubricScores).reduce((a, b) => a + b, 0)} / 16</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Review Status:</span>
+                  <span class="font-bold text-emerald-400">{teacherFeedback?.reviewedAt ? 'Reviewed' : 'Pending Teacher Sync'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. AI Writing Coach Diagnostics Card */}
+            <div class={`p-5 rounded-2xl border space-y-3 flex flex-col justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div class="space-y-2">
+                <div class="flex items-center justify-between border-b pb-2 border-slate-700/50">
+                  <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider">2. AI Coach Diagnostics</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-700">
+                    AI Scanned
+                  </span>
+                </div>
+                <h4 class={`text-xs font-semibold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Automated Writing Audit</h4>
+                <ul class={`text-xs space-y-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                  <li class="flex items-start gap-1.5">
+                    <span class="text-emerald-400 font-bold">&check;</span>
+                    <span><strong>Citation Alignment:</strong> Parenthetical citations detected across local & foreign sources.</span>
+                  </li>
+                  <li class="flex items-start gap-1.5">
+                    <span class="text-amber-400 font-bold">&bull;</span>
+                    <span><strong>Structural Balance:</strong> Ensure thematic matrix items in Section 4 are equally cited.</span>
+                  </li>
+                  <li class="flex items-start gap-1.5">
+                    <span class="text-blue-400 font-bold">&check;</span>
+                    <span><strong>Academic Tone:</strong> Passive/active voice consistency meets university criteria.</span>
+                  </li>
+                </ul>
+              </div>
+
+              <button
+                onClick={() => setActiveTab('synthesis')}
+                class="w-full py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 font-semibold text-xs rounded-xl transition-all"
+              >
+                Re-run AI Writing Audit &rarr;
+              </button>
+            </div>
+
+            {/* 3. Peer Padlet Feedback Summary Card */}
+            <div class={`p-5 rounded-2xl border space-y-3 flex flex-col justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div class="space-y-2">
+                <div class="flex items-center justify-between border-b pb-2 border-slate-700/50">
+                  <span class="text-xs font-bold text-pink-400 uppercase tracking-wider">3. Peer Padlet Ratings</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-pink-950 text-pink-300 border border-pink-700">
+                    Anonymous Feedback
+                  </span>
+                </div>
+                <h4 class={`text-xs font-semibold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Peer Critique Consensus</h4>
+                <div class="space-y-2 text-xs">
+                  <div class="flex justify-between items-center">
+                    <span className="text-slate-400">Evidence Grounding:</span>
+                    <span class="font-bold text-emerald-400">Proficient (L3)</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span className="text-slate-400">Thematic Synthesis:</span>
+                    <span class="font-bold text-blue-400">Exemplary (L4)</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span className="text-slate-400">Critique Depth:</span>
+                    <span class="font-bold text-amber-400">Developing (L2)</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setActiveTab('padlet')}
+                class="w-full py-2 bg-pink-600/20 hover:bg-pink-600/40 text-pink-300 border border-pink-500/40 font-semibold text-xs rounded-xl transition-all"
+              >
+                View Community Padlet Posts &rarr;
+              </button>
+            </div>
+          </div>
+
+          {/* Action Plan Checklist */}
+          <div class={`p-5 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <h3 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Synthesis Revision Action Plan</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                <strong class="text-teal-400 block mb-1">Step A: Address Teacher Notes</strong>
+                Incorporate instructor feedback on methodology contrast between local & foreign papers.
+              </div>
+              <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                <strong class="text-indigo-400 block mb-1">Step B: Refine AI Suggestions</strong>
+                Polish passive sentences flagged during AI coach text parsing.
+              </div>
+              <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                <strong class="text-pink-400 block mb-1">Step C: Finalize Citations</strong>
+                Ensure all tagged statements in Section 4 carry matching in-text parenthetical references.
+              </div>
+            </div>
           </div>
         </div>
       );
