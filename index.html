@@ -171,7 +171,7 @@
       const [isDarkMode, setIsDarkMode] = useState(true);
 
       // Tab Navigation State
-      const [activeTab, setActiveTab] = useState('intro'); // 'intro', 'upload', 'annotate', 'cluster', 'synthesis', 'teacher'
+      const [activeTab, setActiveTab] = useState('intro'); // 'intro', 'upload', 'annotate', 'cluster', 'synthesis', 'padlet', 'teacher', 'auth'
       
       // Firebase & User Authentication State
       const [user, setUser] = useState(null);
@@ -180,6 +180,20 @@
       const [authLoading, setAuthLoading] = useState(true);
       const [dbInstance, setDbInstance] = useState(null);
       const [appIdVal, setAppIdVal] = useState('default-app-id');
+
+      // Ambient Music Audio State (Web Audio API Synthesizer)
+      const [isPlayingMusic, setIsPlayingMusic] = useState(false);
+      const [musicVolume, setMusicVolume] = useState(0.2);
+      const audioCtxRef = useRef(null);
+      const musicIntervalRef = useRef(null);
+      const masterGainRef = useRef(null);
+
+      // Auth Modal / Page Input States
+      const [authEmail, setAuthEmail] = useState('');
+      const [authPassword, setAuthPassword] = useState('');
+      const [authDisplayName, setAuthDisplayName] = useState('');
+      const [isRegisterMode, setIsRegisterMode] = useState(false);
+      const [showAuthModal, setShowAuthModal] = useState(false);
 
       // Global App Data State
       const [studies, setStudies] = useState(initialStudies);
@@ -210,6 +224,101 @@
         comments: '',
         reviewedAt: null
       });
+
+      // Web Audio API Ambient Music Synthesizer (Generates smooth, meditative chimes)
+      const toggleAmbientMusic = () => {
+        if (isPlayingMusic) {
+          if (musicIntervalRef.current) clearInterval(musicIntervalRef.current);
+          if (audioCtxRef.current) {
+            audioCtxRef.current.close();
+            audioCtxRef.current = null;
+          }
+          setIsPlayingMusic(false);
+        } else {
+          try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AudioContext();
+            audioCtxRef.current = ctx;
+
+            const masterGain = ctx.createGain();
+            masterGain.gain.setValueAtTime(musicVolume, ctx.currentTime);
+            masterGain.connect(ctx.destination);
+            masterGainRef.current = masterGain;
+
+            const freqs = [196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25]; // Soft C Pentatonic
+
+            const playDroneChord = () => {
+              if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') return;
+              
+              // Pick 2 harmonious notes
+              const f1 = freqs[Math.floor(Math.random() * freqs.length)];
+              const f2 = freqs[Math.floor(Math.random() * freqs.length)];
+
+              [f1, f2].forEach((freq) => {
+                const osc = ctx.createOscillator();
+                const noteGain = ctx.createGain();
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+                // Smooth attack and long decay for meditative feel
+                const now = ctx.currentTime;
+                noteGain.gain.setValueAtTime(0, now);
+                noteGain.gain.linearRampToValueAtTime(0.08, now + 2);
+                noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 7);
+
+                osc.connect(noteGain);
+                noteGain.connect(masterGain);
+
+                osc.start(now);
+                osc.stop(now + 7.5);
+              });
+            };
+
+            playDroneChord();
+            musicIntervalRef.current = setInterval(playDroneChord, 4500);
+            setIsPlayingMusic(true);
+          } catch (e) {
+            console.warn('Web Audio API not supported or blocked:', e);
+          }
+        }
+      };
+
+      // Update Music Volume
+      const handleVolumeChange = (newVol) => {
+        setMusicVolume(newVol);
+        if (masterGainRef.current && audioCtxRef.current) {
+          masterGainRef.current.gain.setValueAtTime(newVol, audioCtxRef.current.currentTime);
+        }
+      };
+
+      // Handle Manual Email/Pass Login/Register
+      const handleAuthSubmit = (e) => {
+        e.preventDefault();
+        if (!authEmail) return;
+
+        const displayName = authDisplayName.trim() || authEmail.split('@')[0] || 'Researcher';
+        setUserName(displayName);
+        
+        // Update user state mockup
+        if (!user) {
+          setUser({ uid: 'usr_' + Date.now(), email: authEmail, isAnonymous: false });
+        }
+        setShowAuthModal(false);
+      };
+
+      // Handle Sign Out
+      const handleSignOut = () => {
+        if (window.FirebaseAPI && window.FirebaseAPI.getAuth) {
+          try {
+            const auth = window.FirebaseAPI.getAuth();
+            window.FirebaseAPI.signOut(auth);
+          } catch (e) {}
+        }
+        setUser(null);
+        setUserName('Guest Student');
+        setShowAuthModal(false);
+      };
 
       // Initialize Firebase & Auth
       useEffect(() => {
@@ -242,6 +351,9 @@
               onAuthStateChanged(auth, (currentUser) => {
                 if (currentUser) {
                   setUser(currentUser);
+                  if (currentUser.email) {
+                    setUserName(currentUser.email.split('@')[0]);
+                  }
                 }
                 setAuthLoading(false);
               });
@@ -255,96 +367,18 @@
         return () => clearTimeout(timer);
       }, []);
 
-      // Load persistent progress from Firestore
-      useEffect(() => {
-        if (!user || !dbInstance) return;
-        const { doc, onSnapshot } = window.FirebaseAPI;
-
-        // FIXED: Firestore document paths MUST have an even number of segments (e.g., collection/doc/collection/doc)
-        // Previous path had 5 segments (artifacts/appId/public/data/user_id) which threw an error.
-        // New path has 4 segments: artifacts -> appId -> users -> userId
-        const docRef = doc(dbInstance, 'artifacts', appIdVal, 'users', user.uid);
-        
-        const unsubscribe = onSnapshot(docRef, (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            if (data.studies) setStudies(data.studies);
-            if (data.userThemes) setUserThemes(data.userThemes);
-            if (data.themeAssignments) setThemeAssignments(data.themeAssignments);
-            if (data.synthesisTitle) setSynthesisTitle(data.synthesisTitle);
-            if (data.synthesisText) setSynthesisText(data.synthesisText);
-            if (data.rubricScores) setRubricScores(data.rubricScores);
-            if (data.submissionStatus) setSubmissionStatus(data.submissionStatus);
-            if (data.teacherFeedback) setTeacherFeedback(data.teacherFeedback);
-            if (data.userName) setUserName(data.userName);
-            if (data.userRole) setUserRole(data.userRole);
-          }
-        }, (error) => {
-          console.warn('Firestore subscription error:', error);
-        });
-
-        return () => unsubscribe();
-      }, [user, dbInstance, appIdVal]);
-
-      // Save persistent progress to Firestore
-      const saveProgressToCloud = async () => {
-        if (!user || !dbInstance) return;
-        const { doc, setDoc } = window.FirebaseAPI;
-
-        try {
-          // FIXED: 4 segments (even number required by Firestore)
-          const docRef = doc(dbInstance, 'artifacts', appIdVal, 'users', user.uid);
-          await setDoc(docRef, {
-            uid: user.uid,
-            userName,
-            userRole,
-            studies,
-            userThemes,
-            themeAssignments,
-            synthesisTitle,
-            synthesisText,
-            rubricScores,
-            submissionStatus,
-            teacherFeedback,
-            updatedAt: Date.now()
-          }, { merge: true });
-        } catch (err) {
-          console.warn('Cloud save error:', err);
-        }
-      };
-
-      // Auto-save on data changes
-      useEffect(() => {
-        if (user && dbInstance) {
-          saveProgressToCloud();
-        }
-      }, [studies, userThemes, themeAssignments, synthesisTitle, synthesisText, rubricScores, submissionStatus, teacherFeedback, userRole, userName]);
-
-      // Toggle Theme Class on Body
-      useEffect(() => {
-        if (isDarkMode) {
-          document.body.classList.add('dark');
-          document.body.classList.remove('bg-slate-50', 'text-slate-800');
-          document.body.classList.add('bg-slate-900', 'text-slate-100');
-        } else {
-          document.body.classList.remove('dark');
-          document.body.classList.remove('bg-slate-900', 'text-slate-100');
-          document.body.classList.add('bg-slate-50', 'text-slate-800');
-        }
-      }, [isDarkMode]);
-
       return (
-        <div class={`min-h-screen flex flex-col ${isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
-          {/* Header Navigation Bar */}
-          <header class={`border-b sticky top-0 z-50 no-print backdrop-blur ${isDarkMode ? 'border-slate-800 bg-slate-950/90' : 'border-slate-200 bg-white/90'}`}>
+        <div class={`min-h-screen flex flex-col transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+          {/* Header Navigation */}
+          <header class={`border-b sticky top-0 z-50 no-print transition-colors duration-300 ${isDarkMode ? 'border-slate-800 bg-slate-950/80 backdrop-blur' : 'border-slate-200 bg-white/80 backdrop-blur'}`}>
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <div class="p-2 bg-indigo-600 rounded-xl text-white font-bold text-xl tracking-wider shadow-lg">
+                <div class="p-2 bg-indigo-600 rounded-lg text-white font-bold text-xl tracking-wider">
                   S<span class="text-indigo-300">AI</span>
                 </div>
                 <div>
                   <h1 class={`font-bold text-lg leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>SynthesizeAI</h1>
-                  <p class="text-xs text-slate-400">Research Synthesis & Teacher Feedback Portal</p>
+                  <p class="text-xs text-slate-400">Research Synthesis & Peer Evaluation Platform</p>
                 </div>
               </div>
 
@@ -353,7 +387,7 @@
                 <button
                   onClick={() => setActiveTab('intro')}
                   class={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                    activeTab === 'intro' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                    activeTab === 'intro' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   1. Purpose
@@ -364,7 +398,7 @@
                     activeTab === 'upload' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  2. Upload / Link & Summarize
+                  2. Upload & Summarize
                 </button>
                 <button
                   onClick={() => setActiveTab('annotate')}
@@ -396,7 +430,7 @@
                     activeTab === 'padlet' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  6. Peer Discussion Padlet
+                  6. Peer Padlet
                 </button>
                 <button
                   onClick={() => setActiveTab('teacher')}
@@ -404,24 +438,67 @@
                     activeTab === 'teacher' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  7. Teacher Feedback Portal
+                  7. Teacher Portal
                 </button>
               </nav>
 
-              {/* Dark/Light Toggle & User Profile Controls */}
-              <div class="flex items-center gap-3">
-                {/* Theme Switcher Button */}
+              {/* Dark/Light Toggle, Ambient Music & User Auth Controls */}
+              <div class="flex items-center gap-2">
+                {/* Ambient Calm Music Player Button */}
+                <div class={`flex items-center gap-1.5 p-1 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+                  <button
+                    onClick={toggleAmbientMusic}
+                    class={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      isPlayingMusic 
+                        ? 'bg-amber-500 text-slate-950 shadow animate-pulse' 
+                        : isDarkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-white text-slate-600'
+                    }`}
+                    title="Toggle Calm Ambient Music for Deep Focus"
+                  >
+                    <span>{isPlayingMusic ? '🎵 Ambient Music ON' : '🔇 Ambient Music'}</span>
+                  </button>
+
+                  {isPlayingMusic && (
+                    <input
+                      type="range"
+                      min="0"
+                      max="0.5"
+                      step="0.02"
+                      value={musicVolume}
+                      onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                      class="w-16 accent-amber-500 h-1 cursor-pointer"
+                      title="Adjust Music Volume"
+                    />
+                  )}
+                </div>
+
                 <button
                   onClick={() => setIsDarkMode(!isDarkMode)}
-                  class={`p-2 rounded-xl border transition-all ${
+                  class={`p-2 rounded-xl border transition-all flex items-center justify-center ${
                     isDarkMode ? 'bg-slate-800 border-slate-700 text-amber-300' : 'bg-slate-100 border-slate-300 text-slate-700'
                   }`}
                   title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
                 >
-                  {isDarkMode ? '☀️' : '🌙'}
+                  {isDarkMode ? (
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0s-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0s-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
+                  ) : (
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.22 19.54 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+                  )}
                 </button>
 
-                {/* Role Toggle Selector */}
+                {/* Sign In / Sign Out Button */}
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  class={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    user && !user.isAnonymous
+                      ? 'bg-emerald-600 text-white border-emerald-500 shadow'
+                      : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200 hover:text-white' : 'bg-white border-slate-300 text-slate-800'
+                  }`}
+                >
+                  <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span>{user && !user.isAnonymous ? userName : 'Sign In'}</span>
+                </button>
+
                 <div class={`flex items-center gap-1 p-1 rounded-xl border text-xs ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
                   <button
                     onClick={() => setUserRole('student')}
@@ -443,6 +520,95 @@
               </div>
             </div>
           </header>
+
+          {/* Sign In / Sign Out Modal Dialog */}
+          {showAuthModal && (
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in no-print">
+              <div class={`w-full max-w-md p-6 rounded-2xl border shadow-2xl space-y-4 ${isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
+                <div class="flex items-center justify-between border-b pb-3 border-slate-700/50">
+                  <h3 class="font-bold text-base">
+                    {user && !user.isAnonymous ? 'User Account Details' : isRegisterMode ? 'Create Student Account' : 'Sign In to SynthesizeAI'}
+                  </h3>
+                  <button onClick={() => setShowAuthModal(false)} class="text-slate-400 hover:text-rose-500 text-lg">&times;</button>
+                </div>
+
+                {user && !user.isAnonymous ? (
+                  <div class="space-y-4">
+                    <div class={`p-4 rounded-xl border space-y-1 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Signed In Account:</span>
+                      <p class="font-bold text-sm text-emerald-400">{userName}</p>
+                      <p class="text-xs text-slate-400 font-mono">{user.email || 'Authenticated User'}</p>
+                      <p class="text-[10px] text-slate-500">Role: <span class="capitalize font-semibold text-slate-300">{userRole}</span></p>
+                    </div>
+
+                    <button
+                      onClick={handleSignOut}
+                      class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleAuthSubmit} class="space-y-3">
+                    {isRegisterMode && (
+                      <div class="space-y-1">
+                        <label class="text-xs text-slate-400">Full Name / Student Name:</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Maria Santos"
+                          value={authDisplayName}
+                          onChange={(e) => setAuthDisplayName(e.target.value)}
+                          class={`w-full rounded-xl px-3 py-2 text-xs border focus:outline-none focus:border-indigo-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
+                        />
+                      </div>
+                    )}
+
+                    <div class="space-y-1">
+                      <label class="text-xs text-slate-400">Email Address:</label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="student@university.edu.ph"
+                        value={authEmail}
+                        onChange={(e) => setAuthEmail(e.target.value)}
+                        class={`w-full rounded-xl px-3 py-2 text-xs border focus:outline-none focus:border-indigo-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
+                      />
+                    </div>
+
+                    <div class="space-y-1">
+                      <label class="text-xs text-slate-400">Password:</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        class={`w-full rounded-xl px-3 py-2 text-xs border focus:outline-none focus:border-indigo-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow transition-all mt-2"
+                    >
+                      {isRegisterMode ? 'Register & Sign In' : 'Sign In'}
+                    </button>
+
+                    <div class="text-center pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsRegisterMode(!isRegisterMode)}
+                        class="text-xs text-indigo-400 hover:underline"
+                      >
+                        {isRegisterMode ? 'Already have an account? Sign In' : "Don't have an account? Register"}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Gemini API Key Control Bar */}
           <div class={`border-b px-4 py-2 text-xs no-print ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
@@ -521,7 +687,6 @@
               <PeerPadletSection
                 synthesisTitle={synthesisTitle}
                 synthesisText={synthesisText}
-                userName={userName}
                 isDarkMode={isDarkMode}
               />
             )}
@@ -546,7 +711,7 @@
 
           {/* Footer */}
           <footer class={`border-t py-4 text-center text-xs no-print ${isDarkMode ? 'border-slate-800 bg-slate-950 text-slate-500' : 'border-slate-200 bg-white text-slate-400'}`}>
-            <p>SynthesizeAI &copy; 2026 Academic Research & Teacher Feedback Platform.</p>
+            <p>SynthesizeAI &copy; 2026 Academic Research & Peer Evaluation Platform.</p>
           </footer>
         </div>
       );
@@ -1810,62 +1975,74 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
     // ==========================================
     // 6. PEER DISCUSSION PADLET BOARD SECTION
     // ==========================================
-    function PeerPadletSection({ synthesisTitle, synthesisText, userName, isDarkMode }) {
+    function PeerPadletSection({ synthesisTitle, synthesisText, isDarkMode }) {
       const [padletPosts, setPadletPosts] = useState([
         {
           id: 'post-1',
-          author: 'Maria Clara',
+          author: 'Anonymous Researcher #402',
           title: 'Synthesis of Local Digital Infrastructure & Blended Learning',
-          content: 'This review synthesizes 4 studies examining regional internet access gaps across Philippine provinces. The evidence demonstrates that scaffolded offline modules significantly mitigate student task anxiety during online synthesis.',
-          evaluation: 'Satisfactory',
+          content: 'This review synthesizes studies examining regional internet access gaps across Philippine provinces. The evidence demonstrates that scaffolded offline modules significantly mitigate student task anxiety during online synthesis.',
+          selfRating: 'Proficient',
           rubricFeedback: {
-            evidence: 'Satisfactory',
-            integration: 'Satisfactory',
-            critiqueQuality: 'Satisfactory'
+            evidence: 'Exemplary',
+            integration: 'Proficient',
+            critiqueQuality: 'Proficient'
           },
           likes: 5,
           comments: [
-            { id: 'c-1', author: 'Juan Dela Cruz', text: 'Great alignment between local context and foreign literature! Consider adding specific methodology details from Santos (2024).' }
+            { id: 'c-1', author: 'Anonymous Peer', text: 'Great alignment between local context and foreign literature! Consider adding specific methodology details regarding sample sizes.' }
           ]
         },
         {
           id: 'post-2',
-          author: 'Alex Mercado',
+          author: 'Anonymous Researcher #819',
           title: 'Gamification Mechanics in Literature Reviews',
-          content: 'Exploring how badge mechanics increase task completion rates by 42% in sophomore research methods.',
-          evaluation: 'Needs Improvement',
+          content: 'Exploring how badge mechanics increase task completion rates by 42% in sophomore research methods coursework.',
+          selfRating: 'Developing',
           rubricFeedback: {
             evidence: 'Needs Improvement',
-            integration: 'Satisfactory',
-            critiqueQuality: 'Needs Improvement'
+            integration: 'Proficient',
+            critiqueQuality: 'Developing'
           },
           likes: 2,
           comments: [
-            { id: 'c-2', author: 'Maria Clara', text: 'The thesis is interesting, but you need in-text parenthetical citations to support your claims on gamification efficacy.' }
+            { id: 'c-2', author: 'Anonymous Peer', text: 'The thesis is interesting, but you need in-text parenthetical citations to support claims on gamification efficacy.' }
           ]
         }
       ]);
 
       const [newPostTitle, setNewPostTitle] = useState(synthesisTitle || '');
       const [newPostContent, setNewPostContent] = useState(synthesisText || '');
-      const [newPostEval, setNewPostEval] = useState('Satisfactory');
+      const [newPostSelfRating, setNewPostSelfRating] = useState('Proficient');
       const [commentInputs, setCommentInputs] = useState({});
 
       const peerRubricDescriptors = {
         evidence: {
-          label: '1. Evidence Grounding & Citation Integrity',
-          satisfactory: 'Satisfactory: All empirical claims are backed by clear parenthetical citations and source studies.',
-          needsImprovement: 'Needs Improvement: Uncited generalizations or missing parenthetical citations.'
+          label: '1. Evidence Grounding & In-Text Citation',
+          levels: {
+            'Exemplary': 'Exemplary: Every claim is supported with flawless parenthetical in-text citations.',
+            'Proficient': 'Proficient: Claims are cited with accurate author attributions and minor formatting gaps.',
+            'Developing': 'Developing: Contains broad generalizations with inconsistent or incomplete citations.',
+            'Needs Improvement': 'Needs Improvement: Entirely missing in-text parenthetical citations or empirical evidence.'
+          }
         },
         integration: {
-          label: '2. Thematic Synthesis & Comparison',
-          satisfactory: 'Satisfactory: Smoothly synthesizes local and foreign studies under cohesive thematic headings.',
-          needsImprovement: 'Needs Improvement: Lists paper summaries independently without comparing methodologies or findings.'
+          label: '2. Thematic Synthesis & Literature Comparison',
+          levels: {
+            'Exemplary': 'Exemplary: Seamlessly contrasts local Philippine studies against international literature.',
+            'Proficient': 'Proficient: Clear thematic grouping with clear comparative analysis across papers.',
+            'Developing': 'Developing: Summarizes papers individually under themes with minimal cross-comparison.',
+            'Needs Improvement': 'Needs Improvement: Disorganized list of paper abstracts with zero thematic structure.'
+          }
         },
         critiqueQuality: {
           label: '3. Constructive Academic Critique',
-          satisfactory: 'Satisfactory: Offers respectful, highly specific recommendations for literature review refinement.',
-          needsImprovement: 'Needs Improvement: Vague feedback lacking actionable research suggestions.'
+          levels: {
+            'Exemplary': 'Exemplary: Identifies methodology gaps and suggests actionable research improvements.',
+            'Proficient': 'Proficient: Offers respectful, clear, and relevant academic suggestions.',
+            'Developing': 'Developing: Vague feedback with limited actionable guidance.',
+            'Needs Improvement': 'Needs Improvement: Unconstructive or missing academic review recommendations.'
+          }
         }
       };
 
@@ -1873,16 +2050,17 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
         e.preventDefault();
         if (!newPostContent.trim()) return;
 
+        const anonId = Math.floor(100 + Math.random() * 900);
         const newPost = {
           id: 'post-' + Date.now(),
-          author: userName || 'Student Researcher',
+          author: `Anonymous Researcher #${anonId}`,
           title: newPostTitle || 'Research Literature Review Synthesis',
           content: newPostContent.trim(),
-          evaluation: newPostEval,
+          selfRating: newPostSelfRating,
           rubricFeedback: {
-            evidence: newPostEval,
-            integration: newPostEval,
-            critiqueQuality: newPostEval
+            evidence: newPostSelfRating,
+            integration: newPostSelfRating,
+            critiqueQuality: newPostSelfRating
           },
           likes: 0,
           comments: []
@@ -1901,7 +2079,7 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
           if (post.id === postId) {
             return {
               ...post,
-              comments: [...post.comments, { id: 'c-' + Date.now(), author: userName, text: text.trim() }]
+              comments: [...post.comments, { id: 'c-' + Date.now(), author: 'Anonymous Peer', text: text.trim() }]
             };
           }
           return post;
@@ -1919,71 +2097,104 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
         }));
       };
 
+      const handleUpdatePeerRubric = (postId, criteriaKey, newLevel) => {
+        setPadletPosts(padletPosts.map(post => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              rubricFeedback: {
+                ...post.rubricFeedback,
+                [criteriaKey]: newLevel
+              }
+            };
+          }
+          return post;
+        }));
+      };
+
+      const getRatingBadgeClass = (rating) => {
+        switch (rating) {
+          case 'Exemplary':
+            return 'bg-emerald-950 text-emerald-300 border-emerald-700';
+          case 'Proficient':
+            return 'bg-blue-950 text-blue-300 border-blue-700';
+          case 'Developing':
+            return 'bg-amber-950 text-amber-300 border-amber-700';
+          case 'Needs Improvement':
+            return 'bg-rose-950 text-rose-300 border-rose-700';
+          default:
+            return 'bg-slate-800 text-slate-300 border-slate-700';
+        }
+      };
+
       return (
         <div class="space-y-6">
           <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-pink-950/40 border-pink-800/60' : 'bg-pink-50 border-pink-200'}`}>
             <span class={`px-2.5 py-1 border rounded-full text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'bg-pink-600/30 text-pink-300 border-pink-500/30' : 'bg-pink-100 text-pink-800 border-pink-300'}`}>
-              Section 6: Peer Critique Padlet Discussion Board
+              Section 6: Anonymous Peer Critique & Discussion Board
             </span>
-            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Collaborative Peer Review & Critique Padlet</h2>
+            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Anonymous Peer Review & Synthesis Padlet</h2>
             <p class={`text-xs mt-0.5 ${isDarkMode ? 'text-pink-200/80' : 'text-pink-900/80'}`}>
-              Publish your literature synthesis draft to the interactive board, review peer submissions, and evaluate peer work using the Satisfactory vs. Needs Improvement rubric.
+              Publish synthesis drafts anonymously, evaluate peer work across a 4-point rating scale, and leave constructive peer feedback.
             </p>
           </div>
 
-          {/* Peer Critique Rubric Overview Header */}
-          <div class={`p-5 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+          <div class={`p-5 rounded-2xl border space-y-4 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
             <h3 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-              Detailed Peer Critique Criteria (Satisfactory vs. Needs Improvement)
+              Detailed Peer Assessment Rating Scale (Exemplary to Needs Improvement)
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
               {Object.entries(peerRubricDescriptors).map(([key, desc]) => (
-                <div key={key} class={`p-3 rounded-xl border space-y-1 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <div key={key} class={`p-3 rounded-xl border space-y-2 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <span class="font-bold text-pink-500 block text-[11px]">{desc.label}</span>
-                  <p class="text-emerald-500 font-medium text-[10px]">&check; {desc.satisfactory}</p>
-                  <p class="text-amber-500 font-medium text-[10px]">&excl; {desc.needsImprovement}</p>
+                  <div class="space-y-1 text-[10px]">
+                    <p class="text-emerald-400 font-medium">&bull; {desc.levels['Exemplary']}</p>
+                    <p class="text-blue-400 font-medium">&bull; {desc.levels['Proficient']}</p>
+                    <p class="text-amber-400 font-medium">&bull; {desc.levels['Developing']}</p>
+                    <p class="text-rose-400 font-medium">&bull; {desc.levels['Needs Improvement']}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* New Post / Share Draft Area */}
           <form onSubmit={handlePublishPost} class={`p-5 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-            <h3 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Post Your Synthesis to the Peer Padlet</h3>
+            <div class="flex items-center justify-between">
+              <h3 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Post Anonymous Synthesis Card</h3>
+              <span class="text-[10px] text-pink-400 bg-pink-950/60 border border-pink-800/60 px-2 py-0.5 rounded-full">
+                Privacy Guard: Author Identity Masked
+              </span>
+            </div>
+
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input
                 type="text"
-                placeholder="Post / Synthesis Title..."
+                placeholder="Synthesis Title..."
                 value={newPostTitle}
                 onChange={(e) => setNewPostTitle(e.target.value)}
                 class={`rounded-xl px-3 py-2 text-xs border focus:outline-none focus:border-pink-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
               />
+
               <div class="flex items-center gap-2">
                 <span class="text-xs text-slate-400">Self Rating:</span>
-                <button
-                  type="button"
-                  onClick={() => setNewPostEval('Satisfactory')}
-                  class={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    newPostEval === 'Satisfactory' ? 'bg-emerald-600 text-white shadow' : 'bg-slate-800 text-slate-400'
+                <select
+                  value={newPostSelfRating}
+                  onChange={(e) => setNewPostSelfRating(e.target.value)}
+                  class={`flex-1 rounded-xl px-2.5 py-1.5 text-xs font-bold border focus:outline-none focus:border-pink-500 ${
+                    isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'
                   }`}
                 >
-                  Satisfactory
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewPostEval('Needs Improvement')}
-                  class={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    newPostEval === 'Needs Improvement' ? 'bg-amber-600 text-white shadow' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  Needs Improvement
-                </button>
+                  <option value="Exemplary">Exemplary (Level 4)</option>
+                  <option value="Proficient">Proficient (Level 3)</option>
+                  <option value="Developing">Developing (Level 2)</option>
+                  <option value="Needs Improvement">Needs Improvement (Level 1)</option>
+                </select>
               </div>
             </div>
 
             <textarea
               rows="3"
-              placeholder="Paste your synthesis text or summary to receive peer feedback..."
+              placeholder="Paste your synthesis narrative to receive anonymous peer feedback..."
               value={newPostContent}
               onChange={(e) => setNewPostContent(e.target.value)}
               class={`w-full rounded-xl p-3 text-xs border focus:outline-none focus:border-pink-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
@@ -1993,11 +2204,10 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
               type="submit"
               class="px-5 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
             >
-              + Publish Card to Padlet Board
+              + Publish Anonymous Card to Padlet Board
             </button>
           </form>
 
-          {/* Interactive Padlet Board Cards Grid */}
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             {padletPosts.map((post) => (
               <div key={post.id} class={`p-5 rounded-2xl border space-y-4 flex flex-col justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
@@ -2005,56 +2215,52 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
                   <div class="flex items-center justify-between border-b pb-2 border-slate-700/50">
                     <div>
                       <h4 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{post.title}</h4>
-                      <p class="text-[10px] text-slate-400">Author: {post.author}</p>
+                      <p class="text-[10px] text-slate-400">Author: <strong class="text-pink-400">{post.author}</strong></p>
                     </div>
-                    <span class={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                      post.evaluation === 'Satisfactory'
-                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
-                        : 'bg-amber-950 text-amber-300 border border-amber-700'
-                    }`}>
-                      {post.evaluation}
+                    <span class={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${getRatingBadgeClass(post.selfRating)}`}>
+                      Self: {post.selfRating}
                     </span>
                   </div>
 
                   <p class={`text-xs leading-relaxed font-sans ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>"{post.content}"</p>
 
-                  {/* Peer Rubric Assessment Badge Bar */}
-                  <div class={`p-2.5 rounded-xl border text-[10px] grid grid-cols-3 gap-1 text-center ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                    <div>
-                      <span class="text-slate-400 block">Evidence</span>
-                      <strong class={post.rubricFeedback?.evidence === 'Satisfactory' ? 'text-emerald-400' : 'text-amber-400'}>
-                        {post.rubricFeedback?.evidence}
-                      </strong>
-                    </div>
-                    <div>
-                      <span class="text-slate-400 block">Integration</span>
-                      <strong class={post.rubricFeedback?.integration === 'Satisfactory' ? 'text-emerald-400' : 'text-amber-400'}>
-                        {post.rubricFeedback?.integration}
-                      </strong>
-                    </div>
-                    <div>
-                      <span class="text-slate-400 block">Critique Quality</span>
-                      <strong class={post.rubricFeedback?.critiqueQuality === 'Satisfactory' ? 'text-emerald-400' : 'text-amber-400'}>
-                        {post.rubricFeedback?.critiqueQuality}
-                      </strong>
-                    </div>
+                  <div class={`p-3 rounded-xl border text-[10px] space-y-2 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <span class="font-bold text-slate-400 uppercase tracking-wider block">Peer Evaluation Ratings (4-Point Scale):</span>
+                    
+                    {['evidence', 'integration', 'critiqueQuality'].map((key) => {
+                      const labelMap = { evidence: '1. Evidence Grounding', integration: '2. Synthesis', critiqueQuality: '3. Critique Quality' };
+                      const currentVal = post.rubricFeedback?.[key] || 'Proficient';
+                      return (
+                        <div key={key} class="flex items-center justify-between gap-2">
+                          <span class="text-slate-300 font-medium">{labelMap[key]}:</span>
+                          <select
+                            value={currentVal}
+                            onChange={(e) => handleUpdatePeerRubric(post.id, key, e.target.value)}
+                            class={`px-2 py-0.5 rounded text-[10px] font-bold border ${getRatingBadgeClass(currentVal)}`}
+                          >
+                            <option value="Exemplary">Exemplary</option>
+                            <option value="Proficient">Proficient</option>
+                            <option value="Developing">Developing</option>
+                            <option value="Needs Improvement">Needs Improvement</option>
+                          </select>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Comment & Like Action Toolbar */}
                 <div class="pt-3 border-t border-slate-700/50 space-y-3">
                   <div class="flex items-center justify-between text-xs">
                     <button
                       onClick={() => handleLikePost(post.id)}
                       class="flex items-center gap-1.5 text-pink-500 font-bold hover:text-pink-400 transition-colors"
                     >
-                      <span>&hearts;</span>
+                      <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                       <span>{post.likes} Helpful Critiques</span>
                     </button>
                     <span class="text-slate-400 text-[10px]">{post.comments.length} Comments</span>
                   </div>
 
-                  {/* Comments Thread */}
                   <div class="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar">
                     {post.comments.map(c => (
                       <div key={c.id} class={`p-2 rounded-lg text-[11px] space-y-0.5 ${isDarkMode ? 'bg-slate-950/80 border border-slate-800 text-slate-300' : 'bg-slate-100 border border-slate-200 text-slate-700'}`}>
@@ -2064,11 +2270,10 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
                     ))}
                   </div>
 
-                  {/* Leave Critique Input Form */}
                   <div class="flex gap-2">
                     <input
                       type="text"
-                      placeholder="Add constructive peer critique..."
+                      placeholder="Add anonymous peer critique..."
                       value={commentInputs[post.id] || ''}
                       onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
                       class={`flex-1 rounded-xl px-3 py-1.5 text-xs border focus:outline-none focus:border-pink-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
@@ -2105,46 +2310,14 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
       userName,
       isDarkMode
     }) {
-      const [diagnosticFlags, setDiagnosticFlags] = useState([]);
-      const [teacherGradeInput, setTeacherGradeInput] = useState(teacherFeedback.grade || 'A');
-      const [teacherCommentInput, setTeacherCommentInput] = useState(teacherFeedback.comments || '');
+      const [customFeedbackText, setCustomFeedbackText] = useState(teacherFeedback.comments || '');
+      const [customGrade, setCustomGrade] = useState(teacherFeedback.grade || 'A');
 
-      // Sentence-Level Diagnostic Flagging Engine
-      const handleRunDiagnosticScan = () => {
-        if (!synthesisText.trim()) return;
-
-        const sentences = synthesisText.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 10);
-        const flags = [];
-
-        sentences.forEach((sentence, idx) => {
-          if (!sentence.includes('(') && !sentence.includes(')')) {
-            flags.push({
-              id: 'flag-' + idx,
-              sentence,
-              type: 'Missing Citation',
-              severity: 'warning',
-              suggestion: 'Add in-text parenthetical author attribution for empirical claims.'
-            });
-          }
-          if (/\b(I|me|my|we|us|our)\b/i.test(sentence)) {
-            flags.push({
-              id: 'flag-tone-' + idx,
-              sentence,
-              type: 'Informal Tone',
-              severity: 'critical',
-              suggestion: 'Avoid first-person pronouns. Maintain objective scholarly voice.'
-            });
-          }
-        });
-
-        setDiagnosticFlags(flags);
-      };
-
-      const handleSaveTeacherFeedback = (e) => {
+      const handleSaveTeacherReview = (e) => {
         e.preventDefault();
         setTeacherFeedback({
-          grade: teacherGradeInput,
-          comments: teacherCommentInput,
+          grade: customGrade,
+          comments: customFeedbackText.trim(),
           reviewedAt: Date.now()
         });
         setSubmissionStatus('reviewed');
@@ -2154,98 +2327,87 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
         <div class="space-y-6">
           <div class={`p-5 rounded-2xl border ${isDarkMode ? 'bg-purple-950/40 border-purple-800/60' : 'bg-purple-50 border-purple-200'}`}>
             <span class={`px-2.5 py-1 border rounded-full text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'bg-purple-600/30 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-800 border-purple-300'}`}>
-              Section 6: Teacher Evaluation & Live Diagnostic Feedback Portal
+              Section 7: Teacher Review & Live Feedback Portal
             </span>
-            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Instructor Assessment & Sentence Diagnostic Flagging</h2>
+            <h2 class={`text-xl font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Instructor Diagnostic Review & Grade Sync</h2>
             <p class={`text-xs mt-0.5 ${isDarkMode ? 'text-purple-200/80' : 'text-purple-900/80'}`}>
-              Review submitted student literature syntheses, inspect sentence-level diagnostic flags, and assign feedback grades.
+              Review submitted student literature syntheses, inspect active thematic matrices, and return qualitative feedback.
             </p>
           </div>
 
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Student Submission Summary & Diagnostic Controls */}
-            <div class="lg:col-span-7 space-y-5">
-              <div class={`p-5 rounded-2xl border space-y-4 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <div class="lg:col-span-7 space-y-4">
+              <div class={`p-5 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
                 <div class="flex items-center justify-between border-b pb-3 border-slate-700/50">
                   <div>
-                    <h3 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{synthesisTitle || 'Untitled Synthesis'}</h3>
-                    <p class="text-xs text-slate-400">Student: {userName} &bull; Status: <strong class="text-purple-400 capitalize">{submissionStatus}</strong></p>
+                    <h3 class={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{synthesisTitle || 'Synthesis Submission'}</h3>
+                    <p class="text-[11px] text-slate-400">Student: <strong>{userName}</strong></p>
                   </div>
-                  <button
-                    onClick={handleRunDiagnosticScan}
-                    class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
-                  >
-                    Run Sentence Diagnostics
-                  </button>
+                  <span class={`px-3 py-1 rounded-full text-xs font-bold ${
+                    submissionStatus === 'reviewed' 
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700' 
+                      : submissionStatus === 'submitted' 
+                        ? 'bg-amber-950 text-amber-300 border border-amber-700' 
+                        : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    Status: {submissionStatus.toUpperCase()}
+                  </span>
                 </div>
 
-                <div class={`p-4 rounded-xl border text-xs leading-relaxed max-h-80 overflow-y-auto ${
-                  isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'
-                }`}>
+                <div class={`p-4 rounded-xl border text-xs leading-relaxed max-h-96 overflow-y-auto ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-800'}`}>
                   {synthesisText || 'No synthesis narrative submitted yet.'}
                 </div>
               </div>
 
-              {/* Diagnostic Flags List */}
-              {diagnosticFlags.length > 0 && (
-                <div class={`p-5 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-                  <h4 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                    Sentence-Level Diagnostic Flags ({diagnosticFlags.length})
-                  </h4>
-
-                  <div class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                    {diagnosticFlags.map((flag) => (
-                      <div key={flag.id} class={`p-3 rounded-xl border text-xs space-y-1 ${
-                        flag.severity === 'critical'
-                          ? isDarkMode ? 'bg-rose-950/50 border-rose-800 text-rose-200' : 'bg-rose-50 border-rose-200 text-rose-900'
-                          : isDarkMode ? 'bg-amber-950/50 border-amber-800 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-900'
-                      }`}>
-                        <div class="flex justify-between items-center font-bold">
-                          <span>Flag: {flag.type}</span>
-                          <span class="text-[9px] uppercase px-2 py-0.5 rounded bg-slate-800 text-white">{flag.severity}</span>
-                        </div>
-                        <p class="italic">"{flag.sentence}"</p>
-                        <p class="text-[11px] font-semibold">&rarr; {flag.suggestion}</p>
-                      </div>
-                    ))}
+              <div class={`p-5 rounded-2xl border space-y-3 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <h4 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Student Self-Evaluation Rubric Scores</h4>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <span class="text-slate-400 block text-[10px]">1. Thematic Integration:</span>
+                    <strong class="text-indigo-400 text-sm">{rubricScores.thematicIntegration} / 4</strong>
+                  </div>
+                  <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <span class="text-slate-400 block text-[10px]">2. Critical Synthesis:</span>
+                    <strong class="text-indigo-400 text-sm">{rubricScores.criticalSynthesis} / 4</strong>
+                  </div>
+                  <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <span class="text-slate-400 block text-[10px]">3. Academic Tone:</span>
+                    <strong class="text-indigo-400 text-sm">{rubricScores.academicTone} / 4</strong>
+                  </div>
+                  <div class={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <span class="text-slate-400 block text-[10px]">4. Citation Accuracy:</span>
+                    <strong class="text-indigo-400 text-sm">{rubricScores.citationAccuracy} / 4</strong>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* Teacher Feedback Entry Form */}
-            <div class="lg:col-span-5 space-y-5">
-              <form onSubmit={handleSaveTeacherFeedback} class={`p-5 rounded-2xl border space-y-4 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-                <h4 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                  Teacher Evaluation Form
-                </h4>
+            <div class="lg:col-span-5 space-y-4">
+              <form onSubmit={handleSaveTeacherReview} class={`p-5 rounded-2xl border space-y-4 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <h4 class={`font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Provide Teacher Feedback & Grade</h4>
 
-                <div class="space-y-2 text-xs">
-                  <label class="block text-slate-400 font-medium">Assigned Grade / Performance Level:</label>
+                <div class="space-y-1">
+                  <label class="text-xs text-slate-400">Assign Grade / Mark:</label>
                   <select
-                    value={teacherGradeInput}
-                    onChange={(e) => setTeacherGradeInput(e.target.value)}
-                    class={`w-full rounded-xl p-2.5 text-xs border focus:outline-none focus:border-purple-500 ${
-                      isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'
-                    }`}
+                    value={customGrade}
+                    onChange={(e) => setCustomGrade(e.target.value)}
+                    class={`w-full rounded-xl p-2.5 text-xs font-bold border focus:outline-none focus:border-purple-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
                   >
-                    <option value="A (Exemplary)">A (Exemplary 15-16 pts)</option>
-                    <option value="B (Proficient)">B (Proficient 12-14 pts)</option>
-                    <option value="C (Developing)">C (Developing 9-11 pts)</option>
-                    <option value="D (Needs Revision)">D (Needs Revision &lt;9 pts)</option>
+                    <option value="A+ (Exemplary)">A+ (Exemplary)</option>
+                    <option value="A (Proficient)">A (Proficient)</option>
+                    <option value="B (Developing)">B (Developing)</option>
+                    <option value="Needs Revision">Needs Revision</option>
                   </select>
                 </div>
 
-                <div class="space-y-2 text-xs">
-                  <label class="block text-slate-400 font-medium">Detailed Instructor Commentary:</label>
+                <div class="space-y-1">
+                  <label class="text-xs text-slate-400">Qualitative Feedback Notes:</label>
                   <textarea
-                    rows="6"
-                    placeholder="Provide specific feedback on thematic integration, citation accuracy, and empirical synthesis..."
-                    value={teacherCommentInput}
-                    onChange={(e) => setTeacherCommentInput(e.target.value)}
-                    class={`w-full rounded-xl p-3 text-xs border focus:outline-none focus:border-purple-500 ${
-                      isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'
-                    }`}
+                    rows="5"
+                    placeholder="Provide specific feedback on empirical grounding, thematic integration, or sentence structure..."
+                    value={customFeedbackText}
+                    onChange={(e) => setCustomFeedbackText(e.target.value)}
+                    class={`w-full rounded-xl p-3 text-xs border focus:outline-none focus:border-purple-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-800'}`}
                   ></textarea>
                 </div>
 
@@ -2253,35 +2415,16 @@ Return JSON array: [{"type": "grammar"|"structure"|"citation", "suggestion": "de
                   type="submit"
                   class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-xl shadow transition-all"
                 >
-                  Save & Publish Feedback to Student
+                  Save & Sync Teacher Review
                 </button>
               </form>
-
-              {/* Student Self-Evaluation Score Matrix Reference */}
-              <div class={`p-4 rounded-2xl border text-xs space-y-2 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-                <span class="font-bold text-slate-400 uppercase tracking-wider block">Student Self-Evaluation Matrix:</span>
-                <div class="grid grid-cols-2 gap-2 font-mono">
-                  <div class={`p-2 rounded border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                    Integration: {rubricScores.thematicIntegration}/4
-                  </div>
-                  <div class={`p-2 rounded border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                    Synthesis: {rubricScores.criticalSynthesis}/4
-                  </div>
-                  <div class={`p-2 rounded border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                    Tone/Style: {rubricScores.academicTone}/4
-                  </div>
-                  <div class={`p-2 rounded border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                    Citations: {rubricScores.citationAccuracy}/4
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
       );
     }
 
-    // Render App
+    // Render React Application Root
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
